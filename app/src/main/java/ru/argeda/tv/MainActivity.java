@@ -683,6 +683,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     @Override
     public void playbackChanged() {
         boolean on = pb.channel != null;
+        Ui.keepScreenOn(this, pb.active());
         pBuf.setVisibility(on && pb.buffering && pb.error.isEmpty() ? View.VISIBLE : View.GONE);
         pArch.setVisibility(on && pb.isArchive() ? View.VISIBLE : View.GONE);
         String msg = !pb.error.isEmpty() && on ? pb.error

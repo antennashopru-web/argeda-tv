@@ -4,6 +4,9 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.os.Bundle;
+import android.view.ViewGroup;
+import android.content.res.Configuration;
+import android.content.pm.ActivityInfo;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.GestureDetector;
@@ -212,10 +215,59 @@ public class PlayerActivity extends Activity implements Playback.Listener {
             Ui.toast(this, "Формат: " + FIT_NAMES[fit]);
         });
         bAudio.setOnClickListener(v -> pickAudio());
+        TextView bRot = findViewById(R.id.bRot);
+        if (!tv) {
+            // Телефон и планшет: экран поворачивается за устройством, либо закреплён кнопкой «Поворот».
+            rot = getSharedPreferences("argeda", MODE_PRIVATE).getInt("rot", 0);
+            bRot.setVisibility(View.VISIBLE);
+            bRot.setText("⟳  Поворот: " + ROT_NAMES[rot]);
+            bRot.setOnClickListener(v -> {
+                rot = (rot + 1) % ROT_NAMES.length;
+                getSharedPreferences("argeda", MODE_PRIVATE).edit().putInt("rot", rot).apply();
+                bRot.setText("⟳  Поворот: " + ROT_NAMES[rot]);
+                applyRotation();
+            });
+        }
+        applyRotation();
+        fitPanels();
         side.setClickable(true);
         info.setClickable(true);
         epgSide.setClickable(true);
         setupGestures();
+    }
+
+    private static final String[] ROT_NAMES = {"авто", "альбомный", "книжный"};
+    private int rot;
+
+    private void applyRotation() {
+        int o;
+        if (tv) o = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        else if (rot == 1) o = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE;
+        else if (rot == 2) o = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT;
+        else o = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR;
+        setRequestedOrientation(o);
+    }
+
+    /** Боковые списки в книжной ориентации узкого экрана не шире 90% ширины. */
+    private void fitPanels() {
+        int w = getResources().getDisplayMetrics().widthPixels;
+        setWidth(side, Math.min(Ui.dp(this, 380), w * 9 / 10));
+        setWidth(epgSide, Math.min(Ui.dp(this, 440), w * 9 / 10));
+    }
+
+    private static void setWidth(View v, int w) {
+        ViewGroup.LayoutParams lp = v.getLayoutParams();
+        if (lp.width != w) {
+            lp.width = w;
+            v.setLayoutParams(lp);
+        }
+    }
+
+    @Override
+    public void onConfigurationChanged(@NonNull Configuration c) {
+        super.onConfigurationChanged(c);
+        fitPanels();
+        hideSystemUi();
     }
 
     @Override
@@ -270,6 +322,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
 
     @Override
     public void playbackChanged() {
+        Ui.keepScreenOn(this, pb.active());
         boolean err = !pb.error.isEmpty();
         buffering.setVisibility(pb.buffering && !err ? View.VISIBLE : View.GONE);
         if (err) {
