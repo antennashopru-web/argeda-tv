@@ -264,6 +264,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     protected void onStop() {
         super.onStop();
         ui.removeCallbacks(previewRun);
+        ui.removeCallbacks(updRun);
         pb.removeListener(this);
         preview.setPlayer(null);
         pb.release();
@@ -277,7 +278,11 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         if (s != null && !s.id.equals(st.loadedId) && !s.id.equals(st.loadingId)) st.load(false);
         render();
         ui.postDelayed(tick, 60_000);
+        Updater.resume(this);
+        ui.postDelayed(updRun, 4000); // проверка обновлений не мешает запуску канала
     }
+
+    private final Runnable updRun = () -> Updater.check(this, false);
 
     @Override
     protected void onPause() {
@@ -785,6 +790,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             items.add("Изменить PIN-код");
             acts.add(this::changePin);
         }
+        items.add("Проверить обновления");
+        acts.add(() -> Updater.check(this, true));
         items.add("О приложении");
         acts.add(this::about);
         new AlertDialog.Builder(this).setItems(items.toArray(new String[0]), (d, w) -> acts.get(w).run()).show();

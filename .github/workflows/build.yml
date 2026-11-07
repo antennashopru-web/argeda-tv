@@ -6,9 +6,16 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   apk:
     runs-on: ubuntu-latest
+    env:
+      # Номер версии растёт с каждой сборкой: по нему приложение понимает, что вышло обновление.
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.2.${{ github.run_number }}
     steps:
       - uses: actions/checkout@v4
 
@@ -19,9 +26,9 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # Ключ подписи берётся из секретов репозитория (Settings → Secrets → Actions):
+      # Ключ подписи берётся из секретов репозитория (Settings → Secrets and variables → Actions):
       # KEYSTORE_BASE64 (файл .jks в base64), KEYSTORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD.
-      # Без них собирается только отладочная версия.
+      # Обновления ставятся поверх только при одном и том же ключе, поэтому без секретов релиз не выпускается.
       - name: Ключ подписи
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
@@ -43,7 +50,12 @@ jobs:
       - name: Сборка
         run: |
           chmod +x gradlew
-          if [ "$SIGNED" = "1" ]; then ./gradlew --no-daemon assembleDebug assembleRelease; else ./gradlew --no-daemon assembleDebug; fi
+          V="-PversionCode=$((100 + VERSION_CODE)) -PversionName=$VERSION_NAME"
+          if [ "$SIGNED" = "1" ]; then
+            ./gradlew --no-daemon $V assembleDebug assembleRelease
+          else
+            ./gradlew --no-daemon $V assembleDebug
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -52,6 +64,22 @@ jobs:
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk
           if-no-files-found: error
+
+      # Каждый push в main с ключом подписи выпускает релиз; приложения на устройствах находят его сами.
+      - name: Релиз для автообновления
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          CODE=$((100 + VERSION_CODE))
+          cp app/build/outputs/apk/release/app-release.apk "argeda-tv-$CODE.apk"
+          gh release create "v$VERSION_NAME" "argeda-tv-$CODE.apk" \
+            --title "ARGEDA TV $VERSION_NAME" \
+            --notes "$(git log -1 --pretty=%B)"
+
+      - name: Нет ключа подписи
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED != '1'
+        run: echo "::warning::Секреты KEYSTORE_* не заданы — релиз для автообновления не выпущен."
 
       - name: Удаление ключа
         if: always()
