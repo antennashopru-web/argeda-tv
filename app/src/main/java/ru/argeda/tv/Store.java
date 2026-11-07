@@ -228,6 +228,10 @@ final class Store {
         headerEpg = r.epg;
         headerTz = r.tz;
         loadedId = s.id;
+        final List<Channel> list = all;
+        LogoDb.apply(app, list, () -> {
+            if (all == list) notifyChanged();
+        });
     }
 
     private void deliver(int g, Source s, String text) {
@@ -240,6 +244,10 @@ final class Store {
             headerTz = r.tz;
             loadedId = s.id;
             if (epg != null && s.id.equals(epgId)) Epg.attach(all, epg, epgIcons);
+            final List<Channel> list = all;
+            LogoDb.apply(app, list, () -> {
+                if (all == list) notifyChanged();
+            });
             notifyChanged();
         });
     }

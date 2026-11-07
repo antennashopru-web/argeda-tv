@@ -169,12 +169,15 @@ final class Epg {
     static void attach(List<Channel> chs, Map<String, List<Prog>> m, Map<String, String> icons) {
         if (m == null) return;
         for (Channel c : chs) {
-            if (c.logo.isEmpty() && icons != null && !icons.isEmpty()) {
+            if ((c.logo.isEmpty() || c.logoGuessed) && icons != null && !icons.isEmpty()) {
                 String ic = null;
                 if (!c.tvgId.isEmpty()) ic = icons.get("id:" + c.tvgId.toLowerCase(Locale.ROOT));
                 if (ic == null && !c.tvgName.isEmpty()) ic = icon(icons, c.tvgName);
                 if (ic == null) ic = icon(icons, c.name);
-                if (ic != null) c.logo = ic;
+                if (ic != null) {
+                    c.logo = ic;
+                    c.logoGuessed = false;
+                }
             }
             List<Prog> l = null;
             if (!c.tvgId.isEmpty()) l = m.get("id:" + c.tvgId.toLowerCase(Locale.ROOT));
