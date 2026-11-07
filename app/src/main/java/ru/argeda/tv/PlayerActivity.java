@@ -295,7 +295,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         if (now) pb.play(c);
         else {
             if (pb.player != null) pb.player.stop();
-            ui.postDelayed(zapRun, 350); // быстрое листание: запускаем только последний канал
+            ui.postDelayed(zapRun, 200); // быстрое листание: запускаем только последний канал
         }
         showInfo(false);
     }

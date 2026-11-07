@@ -65,6 +65,12 @@ Release подписывается, если в корне проекта ест
 
 Без этого файла собирается неподписанный APK. Готовый файл: `app/build/outputs/apk/release/app-release.apk`.
 
+### Сборка на GitHub
+
+Каждый push и pull request собирает APK в GitHub Actions (вкладка Actions → запуск → архив `argeda-tv-apk`).
+Без секретов собирается отладочная версия `app-debug.apk`: её можно сразу поставить на приставку или телефон.
+Чтобы получить подписанный release, добавьте в Settings → Secrets → Actions: `KEYSTORE_BASE64` (файл `.jks` в base64), `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
+
 ## Устройство кода
 
 | Файл | Назначение |

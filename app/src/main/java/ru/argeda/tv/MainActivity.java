@@ -428,8 +428,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             }
             if (i >= 0 || !narrow) {
                 i = Math.max(0, i);
-                // На приставке сразу включаем последний канал в окне, на телефоне — только по касанию.
-                select(res.get(i), channelsView.isInTouchMode() ? PREVIEW_NONE : PREVIEW_LATER);
+                // На приставке последний канал включается в окне сразу при запуске, на телефоне — только по касанию.
+                select(res.get(i), channelsView.isInTouchMode() ? PREVIEW_NONE : PREVIEW_NOW);
                 focusChannel(i);
             }
         }
@@ -534,7 +534,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             if (sel == c) pb.play(c);
         };
         if (mode == PREVIEW_NOW) previewRun.run();
-        else ui.postDelayed(previewRun, 900); // пока листают список, поток не дёргаем
+        else ui.postDelayed(previewRun, 600); // пока листают список, поток не дёргаем
     }
 
     private void showInfo(Channel c) {

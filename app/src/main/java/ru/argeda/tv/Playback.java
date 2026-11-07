@@ -19,9 +19,11 @@ import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultDataSource;
 import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.datasource.HttpDataSource;
+import androidx.media3.exoplayer.DefaultLoadControl;
 import androidx.media3.exoplayer.DefaultRenderersFactory;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -65,6 +67,13 @@ final class Playback {
 
     private final Runnable retryRun = () -> start(triedHls);
 
+    /**
+     * Скорость сети запоминается между каналами и запусками приложения: новый канал сразу
+     * берёт подходящее качество, без разгона с самого низкого.
+     */
+    private DefaultBandwidthMeter meter;
+    private static final String PREF_BW = "bw";
+
     private Playback(Context c) {
         app = c;
         st = Store.get(c);
@@ -86,7 +95,21 @@ final class Playback {
     void acquire() {
         owners++;
         if (player != null) return;
-        player = new ExoPlayer.Builder(app, new DefaultRenderersFactory(app).setEnableDecoderFallback(true)).build();
+        if (meter == null) {
+            long bw = app.getSharedPreferences("argeda", Context.MODE_PRIVATE).getLong(PREF_BW, 0);
+            DefaultBandwidthMeter.Builder mb = new DefaultBandwidthMeter.Builder(app);
+            if (bw > 0) mb.setInitialBitrateEstimate(bw);
+            meter = mb.build();
+        }
+        // Эфир стартует, как только набралось 0,5 с видео (по умолчанию ExoPlayer ждёт 2,5 с).
+        DefaultLoadControl load = new DefaultLoadControl.Builder()
+                .setBufferDurationsMs(15_000, 50_000, 500, 2_000)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build();
+        player = new ExoPlayer.Builder(app, new DefaultRenderersFactory(app).setEnableDecoderFallback(true))
+                .setLoadControl(load)
+                .setBandwidthMeter(meter)
+                .build();
         player.setAudioAttributes(new AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(), true);
         player.addListener(listener);
         if (channel != null) start(false); // возвращение в приложение — продолжаем с того же места
@@ -96,12 +119,19 @@ final class Playback {
         if (--owners > 0) return;
         owners = 0;
         ui.removeCallbacks(retryRun);
+        saveBandwidth();
         if (player != null) {
             if (isArchive()) archBase = position();
             player.release();
             player = null;
         }
         buffering = false;
+    }
+
+    private void saveBandwidth() {
+        if (meter == null) return;
+        long bw = meter.getBitrateEstimate();
+        if (bw > 100_000) app.getSharedPreferences("argeda", Context.MODE_PRIVATE).edit().putLong(PREF_BW, bw).apply();
     }
 
     boolean isArchive() {
@@ -200,7 +230,7 @@ final class Playback {
         DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
                 .setUserAgent(ua)
                 .setAllowCrossProtocolRedirects(true)
-                .setConnectTimeoutMs(12_000)
+                .setConnectTimeoutMs(8_000)
                 .setReadTimeoutMs(20_000)
                 .setDefaultRequestProperties(hdr);
         MediaItem.Builder mb = new MediaItem.Builder().setUri(url);
@@ -272,7 +302,7 @@ final class Playback {
         if (!hard && retries < 3) {
             retries++;
             fail(describe(e) + "\nПовтор " + retries + " из 3…", false);
-            ui.postDelayed(retryRun, 2500L * retries);
+            ui.postDelayed(retryRun, 1000L * retries);
             return;
         }
         String msg = describe(e);
