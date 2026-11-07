@@ -36,6 +36,11 @@ final class Store {
         void changed();
     }
 
+    /**
+     * Телепрограмма для плейлистов, где её нет: бесплатная iptvx.one, ~4300 каналов (РФ, СНГ, Европа),
+     * облегчённая версия без описаний — 15 МБ вместо 70. Каналы сопоставляются по названию.
+     */
+    static final String DEFAULT_EPG = "https://iptvx.one/EPG_LITE";
     private static final long PLAYLIST_TTL = 6 * 3600_000L, EPG_TTL = 12 * 3600_000L;
     private static Store inst;
 
@@ -267,7 +272,7 @@ final class Store {
         int comma = u.indexOf(',');
         if (comma > 0) u = u.substring(0, comma);
         u = u.trim();
-        return u.startsWith("http://") || u.startsWith("https://") ? u : "";
+        return u.startsWith("http://") || u.startsWith("https://") ? u : DEFAULT_EPG;
     }
 
     boolean epgLoading() {

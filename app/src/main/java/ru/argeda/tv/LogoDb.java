@@ -39,8 +39,13 @@ final class LogoDb {
 
     /** Ключ без «HD», сдвига «+2», пометок в скобках и кода страны. Та же логика — в tools/logos.py. */
     static String key(String name) {
+        return key(name, true);
+    }
+
+    /** shift=false — оставить «+2»: у таких каналов своя программа со сдвигом по времени. */
+    static String key(String name, boolean shift) {
         String s = NOISE.matcher(name).replaceAll(" ");
-        s = SHIFT.matcher(s).replaceAll(" ");
+        if (shift) s = SHIFT.matcher(s).replaceAll(" ");
         for (int i = 0; i < 3; i++) s = COUNTRY.matcher(s.trim()).replaceAll("");
         return Epg.norm(s);
     }
