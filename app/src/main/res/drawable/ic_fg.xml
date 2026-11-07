@@ -1,29 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Значок в стиле ARGEDA: белая вертушка из семи лопастей и «плей» в центре -->
+<!-- Значок ARGEDA TV в стиле «Мой путь»: вертушка из трёх белых и трёх цветных лопастей, в центре кнопка «плей» -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-  <group android:pivotX="54" android:pivotY="54" android:scaleX="0.95" android:scaleY="0.95">
-    <group android:pivotX="54" android:pivotY="54" android:rotation="0.000">
-      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+  <group android:pivotX="54" android:pivotY="54" android:scaleX="0.9" android:scaleY="0.9">
+    <group android:pivotX="54" android:pivotY="54" android:rotation="60">
+      <path android:fillColor="#F2B33D" android:pathData="M57,52 C57,43 58,35 55,26 C47,28 42,34 42,40 C42,46 46,50 50,55 Z" />
     </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="51.429">
-      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    <group android:pivotX="54" android:pivotY="54" android:rotation="180">
+      <path android:fillColor="#E0412F" android:pathData="M57,52 C57,43 58,35 55,26 C47,28 42,34 42,40 C42,46 46,50 50,55 Z" />
     </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="102.857">
-      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    <group android:pivotX="54" android:pivotY="54" android:rotation="300">
+      <path android:fillColor="#F2B33D" android:pathData="M57,52 C57,43 58,35 55,26 C47,28 42,34 42,40 C42,46 46,50 50,55 Z" />
     </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="154.286">
-      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    <group android:pivotX="54" android:pivotY="54" android:rotation="0">
+      <path android:fillColor="#FFFFFF" android:pathData="M57,52 C56,41 57,30 52,19 C44,22 39,30 39,38 C39,45 44,50 50,55 Z" />
     </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="205.714">
-      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    <group android:pivotX="54" android:pivotY="54" android:rotation="120">
+      <path android:fillColor="#FFFFFF" android:pathData="M57,52 C56,41 57,30 52,19 C44,22 39,30 39,38 C39,45 44,50 50,55 Z" />
     </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="257.143">
-      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    <group android:pivotX="54" android:pivotY="54" android:rotation="240">
+      <path android:fillColor="#FFFFFF" android:pathData="M57,52 C56,41 57,30 52,19 C44,22 39,30 39,38 C39,45 44,50 50,55 Z" />
     </group>
-    <group android:pivotX="54" android:pivotY="54" android:rotation="308.571">
-      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
-    </group>
+    <path android:fillColor="#FFFFFF" android:pathData="M44,54 a10,10 0 1,0 20,0 a10,10 0 1,0 -20,0 Z" />
+    <path android:fillColor="#2440B8" android:strokeColor="#2440B8" android:strokeWidth="1.2" android:strokeLineJoin="round" android:pathData="M50.5,47.6 L61.4,54 L50.5,60.4 Z" />
   </group>
-  <path android:fillColor="#FFFFFF" android:strokeColor="#FFFFFF" android:strokeWidth="0.8" android:strokeLineJoin="round" android:pathData="M51.3,50.2 L59,54 L51.3,57.8 Z" />
 </vector>
