@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:background="@color/bg" android:fitsSystemWindows="true">
+
+    <LinearLayout android:id="@+id/top" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical"
+        android:paddingStart="16dp" android:paddingEnd="12dp" android:paddingTop="10dp" android:paddingBottom="8dp">
+
+        <TextView android:id="@+id/brand" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="ARGEDA TV" android:textColor="@color/text" android:textSize="20sp" android:textStyle="bold"
+            android:layout_marginEnd="12dp" />
+
+        <TextView android:id="@+id/source" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1"
+            android:background="@drawable/btn_bg" android:focusable="true" android:clickable="true"
+            android:gravity="center_vertical" android:paddingStart="14dp" android:paddingEnd="14dp"
+            android:singleLine="true" android:ellipsize="end" android:textColor="@color/text" android:textSize="14sp"
+            android:text="Плейлисты ▾" />
+
+        <EditText android:id="@+id/search" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1"
+            android:layout_marginStart="10dp" android:background="@drawable/field_bg" android:hint="🔍  Поиск канала"
+            android:imeOptions="actionSearch" android:inputType="text" android:singleLine="true"
+            android:paddingStart="14dp" android:paddingEnd="14dp" android:textColor="@color/text"
+            android:textColorHint="@color/muted" android:textSize="14sp" />
+
+        <TextView android:id="@+id/menu" android:layout_width="44dp" android:layout_height="40dp"
+            android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
+            android:clickable="true" android:gravity="center" android:text="⋮" android:textColor="@color/text"
+            android:textSize="20sp" android:contentDescription="Меню" />
+    </LinearLayout>
+
+    <FrameLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1">
+
+        <LinearLayout android:id="@+id/body" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:orientation="horizontal">
+            <androidx.recyclerview.widget.RecyclerView android:id="@+id/groups"
+                android:layout_width="260dp" android:layout_height="match_parent"
+                android:paddingStart="8dp" android:paddingEnd="4dp" android:clipToPadding="false" />
+            <androidx.recyclerview.widget.RecyclerView android:id="@+id/channels"
+                android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1"
+                android:paddingStart="4dp" android:paddingEnd="8dp" android:paddingBottom="16dp" android:clipToPadding="false" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/empty" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:orientation="vertical" android:gravity="center" android:padding="32dp" android:visibility="gone">
+            <TextView android:id="@+id/emptyText" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:gravity="center" android:textColor="@color/text" android:textSize="18sp"
+                android:text="Добавьте плейлист вашего IPTV-провайдера" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp"
+                android:gravity="center" android:textColor="@color/muted" android:textSize="14sp"
+                android:text="Ссылка M3U, логин Xtream Codes или файл .m3u с телефона.\nВ приложении нет своих каналов — только ваши." />
+            <TextView android:id="@+id/emptyBtn" android:layout_width="wrap_content" android:layout_height="48dp"
+                android:layout_marginTop="20dp" android:background="@drawable/btn_bg" android:focusable="true"
+                android:clickable="true" android:gravity="center" android:paddingStart="28dp" android:paddingEnd="28dp"
+                android:text="＋  Добавить плейлист" android:textColor="@color/text" android:textSize="16sp" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/loading" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:orientation="vertical" android:gravity="center" android:visibility="gone">
+            <ProgressBar android:layout_width="48dp" android:layout_height="48dp" android:indeterminateTint="@color/accent" />
+            <TextView android:id="@+id/loadingText" android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:layout_marginTop="12dp" android:textColor="@color/muted" android:text="Загружаю плейлист…" />
+        </LinearLayout>
+    </FrameLayout>
+</LinearLayout>

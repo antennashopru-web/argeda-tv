@@ -1,0 +1,16 @@
+# Сборка
+build/
+.gradle/
+local.properties
+*.apk
+*.aab
+# Ключи подписи и секреты — никогда в репозиторий
+*.jks
+*.keystore
+keystore.properties
+.env
+# Среды разработки
+.idea/
+*.iml
+.DS_Store
+__pycache__/

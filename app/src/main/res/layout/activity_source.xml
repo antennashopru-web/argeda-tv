@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="@color/bg" android:fitsSystemWindows="true" android:fillViewport="true">
+
+    <LinearLayout android:id="@+id/form" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal" android:orientation="vertical" android:padding="24dp">
+
+        <TextView android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="Новый плейлист" android:textColor="@color/text" android:textSize="22sp" android:textStyle="bold" />
+
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp" android:orientation="horizontal">
+            <TextView android:id="@+id/tM3u" style="@style/Tab" android:text="Ссылка M3U" />
+            <TextView android:id="@+id/tXtream" style="@style/Tab" android:layout_marginStart="8dp" android:text="Xtream Codes" />
+            <TextView android:id="@+id/tFile" style="@style/Tab" android:layout_marginStart="8dp" android:text="Файл" />
+        </LinearLayout>
+
+        <TextView style="@style/Label" android:text="Название" />
+        <EditText android:id="@+id/name" style="@style/Field" android:hint="Например: Мой провайдер"
+            android:inputType="textCapSentences" android:imeOptions="actionNext" />
+
+        <LinearLayout android:id="@+id/gM3u" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView style="@style/Label" android:text="Ссылка на плейлист (выдаёт провайдер)" />
+            <EditText android:id="@+id/url" style="@style/Field" android:hint="http://…/playlist.m3u8"
+                android:inputType="textUri" android:imeOptions="actionNext" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/gXtream" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:visibility="gone">
+            <TextView style="@style/Label" android:text="Адрес сервера" />
+            <EditText android:id="@+id/server" style="@style/Field" android:hint="http://example.com:8080"
+                android:inputType="textUri" android:imeOptions="actionNext" />
+            <TextView style="@style/Label" android:text="Логин" />
+            <EditText android:id="@+id/user" style="@style/Field" android:inputType="text|textNoSuggestions"
+                android:imeOptions="actionNext" />
+            <TextView style="@style/Label" android:text="Пароль" />
+            <EditText android:id="@+id/pass" style="@style/Field" android:inputType="textPassword"
+                android:imeOptions="actionNext" />
+        </LinearLayout>
+
+        <LinearLayout android:id="@+id/gFile" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:visibility="gone">
+            <TextView android:id="@+id/pick" style="@style/Btn" android:layout_marginTop="16dp"
+                android:text="Выбрать файл .m3u…" />
+            <TextView android:id="@+id/fileInfo" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="8dp" android:textColor="@color/muted" android:textSize="14sp"
+                android:text="Файл копируется в приложение. Чтобы обновить каналы, выберите его снова." />
+        </LinearLayout>
+
+        <TextView style="@style/Label" android:layout_marginTop="22dp"
+            android:text="Телепрограмма XMLTV — необязательно" />
+        <EditText android:id="@+id/epg" style="@style/Field" android:hint="http://…/epg.xml.gz"
+            android:inputType="textUri" android:imeOptions="actionNext" />
+
+        <TextView style="@style/Label" android:text="User-Agent — только если его требует провайдер" />
+        <EditText android:id="@+id/ua" style="@style/Field" android:hint="оставьте пустым"
+            android:inputType="text|textNoSuggestions" android:imeOptions="actionDone" />
+
+        <TextView android:id="@+id/phone" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="20dp" android:background="@drawable/panel_bg" android:padding="16dp"
+            android:textColor="@color/text" android:textSize="15sp" android:lineSpacingExtra="3dp" android:visibility="gone" />
+
+        <LinearLayout android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="22dp" android:orientation="horizontal">
+            <TextView android:id="@+id/save" style="@style/Btn" android:text="Сохранить" />
+            <TextView android:id="@+id/delete" style="@style/Btn" android:layout_marginStart="10dp"
+                android:text="Удалить" android:visibility="gone" />
+            <TextView android:id="@+id/cancel" style="@style/Btn" android:layout_marginStart="10dp" android:text="Отмена" />
+        </LinearLayout>
+
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp"
+            android:textColor="@color/muted" android:textSize="13sp"
+            android:text="Ссылки, логины и пароли хранятся только на этом устройстве и никуда не отправляются, кроме сервера вашего провайдера." />
+    </LinearLayout>
+</ScrollView>
