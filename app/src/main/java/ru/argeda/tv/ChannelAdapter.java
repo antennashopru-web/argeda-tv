@@ -2,6 +2,7 @@ package ru.argeda.tv;
 
 import android.view.KeyEvent;
 import android.view.LayoutInflater;
+import android.content.res.ColorStateList;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -25,6 +26,11 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.VH> {
 
         boolean key(int pos, int keyCode);
     }
+
+    /** Цвета плиток с инициалами (палитра дизайна ARGEDA TV), выбираются по имени канала. */
+    private static final int[] TILES = {
+            0xFF2563EB, 0xFFDC2626, 0xFF059669, 0xFFD97706, 0xFF7C3AED,
+            0xFFDB2777, 0xFF0891B2, 0xFF4F46E5, 0xFFE11D48, 0xFF65A30D };
 
     static final class VH extends RecyclerView.ViewHolder {
         final TextView num, initials, name, now, fav;
@@ -99,6 +105,7 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.VH> {
         h.num.setText(String.valueOf(c.num));
         h.name.setText(c.name);
         h.initials.setText(c.initials());
+        h.initials.setBackgroundTintList(ColorStateList.valueOf(TILES[(c.name.hashCode() & 0x7fffffff) % TILES.length]));
         Logos.show(h.logo, h.initials, c.logo);
         long t = System.currentTimeMillis();
         Epg.Prog p = Epg.at(c.progs, t);

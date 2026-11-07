@@ -27,7 +27,7 @@
 
     <!-- Телепрограмма канала справа (кнопка «Телепрограмма») -->
     <LinearLayout android:id="@+id/epgSide" android:layout_width="440dp" android:layout_height="match_parent"
-        android:layout_gravity="end" android:background="#E60B1220" android:orientation="vertical"
+        android:layout_gravity="end" android:background="@drawable/side_bg" android:orientation="vertical"
         android:paddingTop="12dp" android:visibility="gone">
         <TextView android:id="@+id/epgTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingBottom="8dp"
@@ -40,7 +40,7 @@
 
     <!-- Боковой список каналов (влево на пульте, «Список» на телефоне) -->
     <LinearLayout android:id="@+id/side" android:layout_width="380dp" android:layout_height="match_parent"
-        android:layout_gravity="start" android:background="#E60B1220" android:orientation="vertical"
+        android:layout_gravity="start" android:background="@drawable/side_bg" android:orientation="vertical"
         android:paddingTop="12dp" android:visibility="gone">
         <TextView android:id="@+id/sideTitle" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:paddingStart="16dp" android:paddingEnd="16dp" android:paddingBottom="8dp"
@@ -60,7 +60,7 @@
                 android:paddingEnd="8dp" android:text="ЗАПИСЬ" android:textColor="@color/text" android:textSize="12sp"
                 android:textStyle="bold" android:visibility="gone" />
             <TextView android:id="@+id/infoNum" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:layout_marginEnd="12dp" android:textColor="@color/accent2" android:textSize="22sp" android:textStyle="bold" />
+                android:layout_marginEnd="12dp" android:textColor="@color/accentLight" android:textSize="22sp" android:textStyle="bold" />
             <TextView android:id="@+id/infoName" android:layout_width="0dp" android:layout_height="wrap_content"
                 android:layout_weight="1" android:singleLine="true" android:ellipsize="end"
                 android:textColor="@color/text" android:textSize="22sp" android:textStyle="bold" />
