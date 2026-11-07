@@ -25,4 +25,10 @@ final class Ui {
                 || pm.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
                 || !pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN);
     }
+
+    /** Не даём экрану погаснуть, пока идёт просмотр. */
+    static void keepScreenOn(android.app.Activity a, boolean on) {
+        if (on) a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        else a.getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+    }
 }

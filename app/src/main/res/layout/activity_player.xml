@@ -2,7 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/root" android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@android:color/black" android:keepScreenOn="true">
+    android:background="@android:color/black">
 
     <androidx.media3.ui.PlayerView android:id="@+id/video" android:layout_width="match_parent"
         android:layout_height="match_parent" app:use_controller="false" app:resize_mode="fit"
@@ -101,6 +101,10 @@
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
                     android:text="⛶  Формат" android:textColor="@color/text" />
+                <TextView android:id="@+id/bRot" android:layout_width="wrap_content" android:layout_height="40dp"
+                    android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
+                    android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
+                    android:textColor="@color/text" android:visibility="gone" />
                 <TextView android:id="@+id/bAudio" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"

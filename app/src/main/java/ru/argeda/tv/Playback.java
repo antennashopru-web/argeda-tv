@@ -272,6 +272,7 @@ final class Playback {
                 playedMs += t - playingSince;
                 playingSince = 0;
             }
+            notifyChanged(); // экран не гаснет, пока идёт видео
         }
 
         @Override
@@ -284,6 +285,11 @@ final class Playback {
             notifyChanged();
         }
     };
+
+    /** Видео идёт или вот-вот пойдёт (буферизация, переподключение) — экран гасить нельзя. */
+    boolean active() {
+        return player != null && channel != null && player.getPlayWhenReady();
+    }
 
     private void onError(PlaybackException e) {
         if (player == null || channel == null) return;

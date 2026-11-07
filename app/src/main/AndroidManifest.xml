@@ -38,7 +38,6 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|uiMode"
             android:exported="false"
             android:launchMode="singleTop"
-            android:screenOrientation="sensorLandscape"
             android:theme="@style/PlayerTheme" />
 
         <activity
