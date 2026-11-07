@@ -26,7 +26,9 @@ public class SourceActivity extends Activity {
     private Store st;
     private Source src;
     private boolean isNew;
-    private String type = "m3u";
+    private String type = "m3u", archive = "auto";
+    private static final String[] ARCH_IDS = {"auto", "shift", "flussonic", "xc", "none"};
+    private static final String[] ARCH_NAMES = {"Автоматически", "Сдвиг (?utc=…&lutc=…)", "Flussonic", "Xtream Codes", "Не использовать"};
     private EditText name, url, server, user, pass, epg, ua;
     private TextView tM3u, tXtream, tFile, fileInfo, phone;
     private View gM3u, gXtream, gFile;
@@ -82,6 +84,19 @@ public class SourceActivity extends Activity {
         else if (picked.exists()) fileInfo.setText("Файл выбран — нажмите «Сохранить»");
         if (!isNew && "file".equals(src.type) && !picked.exists()) fileInfo.setText("Файл загружен ранее. Можно выбрать другой.");
 
+        archive = b != null ? b.getString("archive", src.archive) : src.archive;
+        TextView arch = findViewById(R.id.archive);
+        arch.setText(archName(archive));
+        arch.setOnClickListener(v -> {
+            int sel = 0;
+            for (int i = 0; i < ARCH_IDS.length; i++) if (ARCH_IDS[i].equals(archive)) sel = i;
+            new AlertDialog.Builder(this).setTitle("Тип архива")
+                    .setSingleChoiceItems(ARCH_NAMES, sel, (d, w) -> {
+                        archive = ARCH_IDS[w];
+                        arch.setText(archName(archive));
+                        d.dismiss();
+                    }).show();
+        });
         ((TextView) findViewById(R.id.title)).setText(isNew ? "Новый плейлист" : "Плейлист «" + src.title() + "»");
         setType(b != null ? b.getString("type", src.type) : src.type);
 
@@ -108,6 +123,7 @@ public class SourceActivity extends Activity {
     protected void onSaveInstanceState(@NonNull Bundle out) {
         super.onSaveInstanceState(out);
         out.putString("type", type);
+        out.putString("archive", archive);
         out.putString("sid", src.id);
     }
 
@@ -139,6 +155,11 @@ public class SourceActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         io.shutdown();
+    }
+
+    private static String archName(String id) {
+        for (int i = 0; i < ARCH_IDS.length; i++) if (ARCH_IDS[i].equals(id)) return ARCH_NAMES[i];
+        return ARCH_NAMES[0];
     }
 
     private void setType(String t) {
@@ -260,6 +281,7 @@ public class SourceActivity extends Activity {
         src.pass = "xtream".equals(type) ? pw : "";
         src.epg = ep;
         src.ua = ag;
+        src.archive = archive;
         String newKey = src.type + "\n" + src.url + "\n" + src.server + "\n" + src.user + "\n" + src.pass + "\n" + src.ua;
 
         if ("file".equals(type)) {

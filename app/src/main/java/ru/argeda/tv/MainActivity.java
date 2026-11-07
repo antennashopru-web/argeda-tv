@@ -20,21 +20,31 @@ import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.OptIn;
+import androidx.media3.common.util.UnstableApi;
+import androidx.media3.ui.PlayerView;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-/** Главный экран: группы слева, каналы справа, поиск и меню сверху. */
-public class MainActivity extends Activity implements Store.Listener {
+/**
+ * Главный экран: группы, каналы с текущей передачей, справа — окно предпросмотра и телепрограмма
+ * выбранного канала с записями. На узком экране телефона предпросмотр сверху, список снизу.
+ */
+@OptIn(markerClass = UnstableApi.class)
+public class MainActivity extends Activity implements Store.Listener, Playback.Listener {
     private static final String G_ALL = "\u0001all", G_FAV = "\u0001fav", G_REC = "\u0001rec";
 
     private static final class Group {
@@ -49,7 +59,19 @@ public class MainActivity extends Activity implements Store.Listener {
     }
 
     private Store st;
-    private RecyclerView groupsView, channelsView;
+    private Playback pb;
+    private RecyclerView groupsView, channelsView, epgList;
+    private PlayerView preview;
+    private View pv, pBuf, pArch, epgBox, tChannels, tEpg;
+    private TextView pMsg, pTitle, pNow, pDesc, epgEmpty;
+    private ProgressBar pProg;
+    private EpgAdapter ea;
+    /** Выбранный канал: его показывают окно предпросмотра и телепрограмма. */
+    private Channel sel;
+    private Runnable previewRun;
+    /** Была ли телепрограмма, когда панель канала заполнялась (чтобы обновить её, когда программа загрузится). */
+    private boolean infoHadEpg;
+    private final SimpleDateFormat hm = new SimpleDateFormat("HH:mm", Locale.getDefault());
     private final List<Group> groups = new ArrayList<>();
     private final GroupAdapter ga = new GroupAdapter();
     private ChannelAdapter ca;
@@ -66,6 +88,7 @@ public class MainActivity extends Activity implements Store.Listener {
         @Override
         public void run() {
             if (st.hasEpg()) ca.notifyItemRangeChanged(0, ca.getItemCount(), "t");
+            if (sel != null) updateNow(sel);
             ui.postDelayed(this, 60_000);
         }
     };
@@ -75,6 +98,7 @@ public class MainActivity extends Activity implements Store.Listener {
         super.onCreate(b);
         setContentView(R.layout.activity_main);
         st = Store.get(this);
+        pb = Playback.get(this);
         Logos.init(this);
         groupsView = findViewById(R.id.groups);
         channelsView = findViewById(R.id.channels);
@@ -87,21 +111,81 @@ public class MainActivity extends Activity implements Store.Listener {
         emptyText = findViewById(R.id.emptyText);
         emptyBtn = findViewById(R.id.emptyBtn);
 
-        narrow = getResources().getConfiguration().screenWidthDp < 600;
-        if (narrow) {
-            groupsView.setVisibility(View.GONE);
-            findViewById(R.id.brand).setVisibility(View.GONE);
-        }
+        pv = findViewById(R.id.pv);
+        preview = findViewById(R.id.preview);
+        pBuf = findViewById(R.id.pBuf);
+        pArch = findViewById(R.id.pArch);
+        pMsg = findViewById(R.id.pMsg);
+        pTitle = findViewById(R.id.pTitle);
+        pNow = findViewById(R.id.pNow);
+        pProg = findViewById(R.id.pProg);
+        pDesc = findViewById(R.id.pDesc);
+        epgList = findViewById(R.id.epgList);
+        epgEmpty = findViewById(R.id.epgEmpty);
+        epgBox = findViewById(R.id.epgBox);
+        tChannels = findViewById(R.id.tChannels);
+        tEpg = findViewById(R.id.tEpg);
+
+        // Разметка выбирается по ширине экрана (layout-w600dp): на узкой нет колонки групп.
+        narrow = groupsView == null;
         if (b != null) curGroup = b.getString("g", G_ALL);
 
-        groupsView.setLayoutManager(new LinearLayoutManager(this));
-        groupsView.setAdapter(ga);
-        groupsView.setItemAnimator(null);
+        if (groupsView != null) {
+            groupsView.setLayoutManager(new LinearLayoutManager(this));
+            groupsView.setAdapter(ga);
+            groupsView.setItemAnimator(null);
+        }
+        if (tChannels != null) {
+            tChannels.setOnClickListener(v -> setTab(false));
+            tEpg.setOnClickListener(v -> setTab(true));
+            setTab(false);
+        }
+        pv.setOnClickListener(v -> {
+            if (sel != null) openFull(sel);
+        });
+        pv.setOnKeyListener((v, code, e) -> {
+            if (e.getAction() == KeyEvent.ACTION_DOWN && code == KeyEvent.KEYCODE_DPAD_LEFT) {
+                focusChannel(indexOfSel());
+                return true;
+            }
+            return false;
+        });
+
+        ea = new EpgAdapter(new EpgAdapter.Listener() {
+            @Override
+            public void click(int pos) {
+                if (sel != null && pos < ea.rows().size()) openFromEpg(sel, ea.rows().get(pos));
+            }
+
+            @Override
+            public void focus(int pos) {
+                if (pDesc == null || pos >= ea.rows().size()) return;
+                Epg.Prog p = ea.rows().get(pos).p;
+                showDesc(p);
+            }
+
+            @Override
+            public boolean key(int pos, int code) {
+                if (code == KeyEvent.KEYCODE_DPAD_LEFT && !narrow) {
+                    focusChannel(indexOfSel());
+                    return true;
+                }
+                if (code == KeyEvent.KEYCODE_DPAD_RIGHT) return true;
+                return false;
+            }
+        });
+        epgList.setLayoutManager(new LinearLayoutManager(this));
+        epgList.setAdapter(ea);
+        epgList.setItemAnimator(null);
 
         ca = new ChannelAdapter(st, new ChannelAdapter.Listener() {
             @Override
             public void click(int pos) {
-                play(pos);
+                List<Channel> l = ca.items();
+                if (pos < 0 || pos >= l.size()) return;
+                Channel c = l.get(pos);
+                if (!channelsView.isInTouchMode() || !st.preview() || (c == sel && same(pb.channel, c))) openFull(c);
+                else select(c, PREVIEW_NOW); // касание: сначала в окне, второе касание — на весь экран
             }
 
             @Override
@@ -110,9 +194,20 @@ public class MainActivity extends Activity implements Store.Listener {
             }
 
             @Override
+            public void focus(int pos) {
+                List<Channel> l = ca.items();
+                if (pos >= 0 && pos < l.size() && l.get(pos) != sel) select(l.get(pos), PREVIEW_LATER);
+            }
+
+            @Override
             public boolean key(int pos, int code) {
                 if (code == KeyEvent.KEYCODE_DPAD_LEFT && !narrow) {
                     focusGroup();
+                    return true;
+                }
+                if (code == KeyEvent.KEYCODE_DPAD_RIGHT && !narrow) {
+                    if (ea.getItemCount() > 0) focusEpg();
+                    else pv.requestFocus();
                     return true;
                 }
                 return false;
@@ -156,6 +251,25 @@ public class MainActivity extends Activity implements Store.Listener {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        pb.acquire();
+        preview.setPlayer(pb.player);
+        pb.addListener(this);
+        if (!st.preview() && pb.channel != null) pb.stop();
+        playbackChanged();
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        ui.removeCallbacks(previewRun);
+        pb.removeListener(this);
+        preview.setPlayer(null);
+        pb.release();
+    }
+
+    @Override
     protected void onResume() {
         super.onResume();
         st.listener = this;
@@ -175,7 +289,10 @@ public class MainActivity extends Activity implements Store.Listener {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (isFinishing()) st.setShowAdult(false);
+        if (isFinishing()) {
+            st.setShowAdult(false);
+            pb.stop();
+        }
     }
 
     @Override
@@ -246,6 +363,18 @@ public class MainActivity extends Activity implements Store.Listener {
         show(body);
         buildGroups();
         applyFilter();
+        if (sel != null) {
+            Channel fresh = findSame(vis, sel);
+            if (fresh == null) {
+                sel = null;
+                ca.current = null;
+            } else if (fresh != sel || infoHadEpg != st.hasEpg()) {
+                sel = fresh;
+                ca.current = fresh;
+                showInfo(fresh);
+            }
+        }
+        if (sel == null) showInfo(null);
     }
 
     private void show(View v) {
@@ -293,7 +422,16 @@ public class MainActivity extends Activity implements Store.Listener {
         if (focusLast && !res.isEmpty()) {
             focusLast = false;
             int i = indexOfKey(res, st.lastKey);
-            if (i >= 0 || !narrow) focusChannel(Math.max(0, i));
+            if (pb.channel != null) {
+                Channel playing = findSame(res, pb.channel);
+                if (playing != null) i = res.indexOf(playing);
+            }
+            if (i >= 0 || !narrow) {
+                i = Math.max(0, i);
+                // На приставке сразу включаем последний канал в окне, на телефоне — только по касанию.
+                select(res.get(i), channelsView.isInTouchMode() ? PREVIEW_NONE : PREVIEW_LATER);
+                focusChannel(i);
+            }
         }
     }
 
@@ -378,16 +516,176 @@ public class MainActivity extends Activity implements Store.Listener {
 
     // ---------- Действия ----------
 
-    private void play(int pos) {
+    // ---------- Предпросмотр и телепрограмма ----------
+
+    private static final int PREVIEW_NONE = 0, PREVIEW_LATER = 1, PREVIEW_NOW = 2;
+
+    private void select(Channel c, int mode) {
+        Channel old = sel;
+        sel = c;
+        ca.current = c;
         List<Channel> l = ca.items();
-        if (pos < 0 || pos >= l.size()) return;
-        Channel c = l.get(pos);
+        if (old != null && l.contains(old)) ca.notifyItemChanged(l.indexOf(old), "sel");
+        if (l.contains(c)) ca.notifyItemChanged(l.indexOf(c), "sel");
+        showInfo(c);
+        ui.removeCallbacks(previewRun);
+        if (mode == PREVIEW_NONE || !st.preview() || (same(pb.channel, c) && !pb.isArchive())) return;
+        previewRun = () -> {
+            if (sel == c) pb.play(c);
+        };
+        if (mode == PREVIEW_NOW) previewRun.run();
+        else ui.postDelayed(previewRun, 900); // пока листают список, поток не дёргаем
+    }
+
+    private void showInfo(Channel c) {
+        if (c == null) {
+            pTitle.setText(st.visible().isEmpty() ? "" : "Выберите канал");
+            pNow.setText("");
+            pProg.setVisibility(View.GONE);
+            if (pDesc != null) pDesc.setVisibility(View.GONE);
+            ea.set(new ArrayList<>());
+            epgEmpty.setVisibility(View.GONE);
+            return;
+        }
+        infoHadEpg = st.hasEpg();
+        pTitle.setText(c.num + "   " + c.name);
+        updateNow(c);
+        long now = System.currentTimeMillis();
+        List<EpgAdapter.Row> rows = EpgAdapter.build(c, st.current(), now);
+        ea.playing = playingStart(c);
+        ea.set(rows);
+        if (rows.isEmpty()) {
+            Source s = st.current();
+            epgEmpty.setText(st.epgUrl(s).isEmpty()
+                    ? "Телепрограммы нет. Адрес телепрограммы (XMLTV) можно добавить в настройках плейлиста — тогда здесь будут передачи, а у каналов с архивом — записи."
+                    : st.epgLoading() ? "Загружаю телепрограмму…" : "Для этого канала телепрограммы нет.");
+            epgEmpty.setVisibility(View.VISIBLE);
+        } else {
+            epgEmpty.setVisibility(View.GONE);
+            int i = EpgAdapter.nowIndex(rows);
+            ((LinearLayoutManager) epgList.getLayoutManager()).scrollToPositionWithOffset(i, Ui.dp(this, 60));
+        }
+    }
+
+    private void updateNow(Channel c) {
+        long t = System.currentTimeMillis();
+        Epg.Prog p = Epg.at(c.progs, t);
+        int days = Catchup.days(c, st.current());
+        if (p != null) {
+            pNow.setText(hm.format(new Date(p.start)) + "–" + hm.format(new Date(p.stop)) + "   " + p.title);
+            pProg.setProgress((int) ((t - p.start) * 1000 / Math.max(1, p.stop - p.start)));
+            pProg.setVisibility(View.VISIBLE);
+        } else {
+            pNow.setText(c.groupTitle() + (days > 0 ? "   ·   архив " + days + " " + dayWord(days) : ""));
+            pProg.setVisibility(View.GONE);
+        }
+        showDesc(p);
+    }
+
+    private void showDesc(Epg.Prog p) {
+        if (pDesc == null) return;
+        if (p != null && p.desc != null && !p.desc.isEmpty()) {
+            pDesc.setText(p.desc);
+            pDesc.setVisibility(View.VISIBLE);
+        } else pDesc.setVisibility(View.GONE);
+    }
+
+    private static String dayWord(int n) {
+        int m10 = n % 10, m100 = n % 100;
+        if (m10 == 1 && m100 != 11) return "день";
+        if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return "дня";
+        return "дней";
+    }
+
+    private long playingStart(Channel c) {
+        if (!same(pb.channel, c)) return -1;
+        return pb.isArchive() ? pb.archStart : 0;
+    }
+
+    private void focusEpg() {
+        int i = EpgAdapter.nowIndex(ea.rows());
+        ((LinearLayoutManager) epgList.getLayoutManager()).scrollToPositionWithOffset(i, Ui.dp(this, 60));
+        focusAt(epgList, i, 10);
+    }
+
+    private int indexOfSel() {
+        return sel == null ? 0 : Math.max(0, ca.items().indexOf(sel));
+    }
+
+    private void setTab(boolean epg) {
+        if (tChannels == null) return;
+        tChannels.setSelected(!epg);
+        tEpg.setSelected(epg);
+        channelsView.setVisibility(epg ? View.GONE : View.VISIBLE);
+        epgBox.setVisibility(epg ? View.VISIBLE : View.GONE);
+    }
+
+    static boolean same(Channel a, Channel b) {
+        return a != null && b != null && (a == b || a.url.equals(b.url));
+    }
+
+    private static Channel findSame(List<Channel> l, Channel c) {
+        if (c == null) return null;
+        for (Channel x : l) if (same(x, c)) return x;
+        return null;
+    }
+
+    /** Строка телепрограммы: запись — смотреть с начала передачи, текущая — прямой эфир. */
+    private void openFromEpg(Channel c, EpgAdapter.Row r) {
+        long now = System.currentTimeMillis();
+        if (r.future) {
+            Ui.toast(this, "Передача начнётся в " + hm.format(new Date(r.p.start)));
+            return;
+        }
+        if (r.now) {
+            // Текущая передача — прямой эфир; «с начала» — в телепрограмме на полном экране.
+            if (!same(pb.channel, c) || pb.isArchive()) pb.play(c);
+            openFull(c);
+            return;
+        }
+        if (!r.archive) {
+            Ui.toast(this, Catchup.days(c, st.current()) > 0 ? "Эта передача уже не хранится в архиве" : "У этого канала нет архива");
+            return;
+        }
+        pb.playArchive(c, r.p.start, r.p.start, Math.min(r.p.stop, now), r.slot ? "" : r.p.title);
+        openFull(c);
+    }
+
+    /** На весь экран: тот же поток продолжает играть без новой загрузки. */
+    private void openFull(Channel c) {
+        List<Channel> l = ca.items();
+        int i = l.indexOf(c);
+        if (i < 0) {
+            l = st.visible();
+            i = Math.max(0, l.indexOf(c));
+        }
         st.playList = new ArrayList<>(l);
-        st.playIndex = pos;
+        st.playIndex = i;
         st.playTitle = search.length() > 0 ? "Поиск: " + search.getText().toString().trim() : titleOf(curGroup);
         st.played(c);
+        if (!same(pb.channel, c)) pb.play(c);
+        ui.removeCallbacks(previewRun);
         focusLast = true;
         startActivity(new Intent(this, PlayerActivity.class).putExtra("key", c.key()));
+    }
+
+    @Override
+    public void playbackChanged() {
+        boolean on = pb.channel != null;
+        pBuf.setVisibility(on && pb.buffering && pb.error.isEmpty() ? View.VISIBLE : View.GONE);
+        pArch.setVisibility(on && pb.isArchive() ? View.VISIBLE : View.GONE);
+        String msg = !pb.error.isEmpty() && on ? pb.error
+                : on ? "" : !st.preview() ? "Предпросмотр выключен.\nOK — смотреть на весь экран"
+                : channelsView.isInTouchMode() ? "Коснитесь канала, чтобы посмотреть его здесь" : "";
+        pMsg.setText(msg);
+        pMsg.setVisibility(msg.isEmpty() ? View.GONE : View.VISIBLE);
+        if (sel != null && ea.getItemCount() > 0) {
+            long ps = playingStart(sel);
+            if (ps != ea.playing) {
+                ea.playing = ps;
+                ea.notifyItemRangeChanged(0, ea.getItemCount(), "p");
+            }
+        }
     }
 
     private void toggleFav(int pos) {
@@ -472,6 +770,13 @@ public class MainActivity extends Activity implements Store.Listener {
                 });
             }
         }
+        items.add(st.preview() ? "Окно предпросмотра: выключить" : "Окно предпросмотра: включить");
+        acts.add(() -> {
+            st.setPreview(!st.preview());
+            if (!st.preview()) pb.stop();
+            else if (sel != null) select(sel, PREVIEW_NOW);
+            playbackChanged();
+        });
         if (st.adultCount() > 0) {
             items.add(st.showAdult ? "Скрыть каналы 18+" : "Показать каналы 18+");
             acts.add(this::toggleAdult);
@@ -488,6 +793,7 @@ public class MainActivity extends Activity implements Store.Listener {
     private void toggleAdult() {
         if (st.showAdult) {
             st.setShowAdult(false);
+            if (pb.channel != null && pb.channel.adult) pb.stop();
             Ui.toast(this, "Каналы 18+ скрыты");
             render();
             return;
@@ -568,9 +874,12 @@ public class MainActivity extends Activity implements Store.Listener {
         new AlertDialog.Builder(this).setTitle("ARGEDA TV " + v).setMessage(
                 "Проигрыватель IPTV для приставок и телефонов. Своих каналов в приложении нет: "
                         + "оно показывает плейлист вашего провайдера (ссылка M3U, Xtream Codes или файл).\n\n"
-                        + "Пульт:\n▲ ▼ — переключение каналов\nOK или ◀ — список каналов\n▶ — сведения и кнопки\n"
-                        + "Цифры — номер канала\nДолгое нажатие OK в списке — избранное\n\n"
-                        + "Телефон: касание — сведения, свайп вверх/вниз — каналы, свайп вправо — список.\n\n"
+                        + "Пульт в списке:\n▲ ▼ — выбор канала (он включается в окне справа)\nOK — на весь экран\n"
+                        + "▶ — телепрограмма и записи, ◀ — группы\nДолгое нажатие OK — избранное\n\n"
+                        + "Пульт на весь экран:\n▲ ▼ — каналы, OK или ◀ — список, ▶ — сведения и кнопки, цифры — номер канала\n"
+                        + "В записи: ◀ ▶ — перемотка, «Назад» — вернуться в эфир\n\n"
+                        + "Телефон: касание канала — в окне, второе касание — на весь экран. "
+                        + "На весь экран: свайп вверх/вниз — каналы, в записи свайп влево/вправо — перемотка.\n\n"
                         + "Ссылки и пароли хранятся только на этом устройстве.")
                 .setPositiveButton("OK", null).show();
     }

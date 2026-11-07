@@ -52,6 +52,8 @@ final class Store {
     private List<Channel> visibleCache;
     String loadedId, loadingId;
     private String headerEpg = "";
+    /** Часовой пояс сервера Xtream (для ссылок на архив). */
+    String headerTz = "";
     boolean busy;
     /** Текст ошибки последней загрузки (пусто — всё хорошо) и её порядковый номер. */
     String status = "";
@@ -222,6 +224,7 @@ final class Store {
         all = r.list;
         visibleCache = null;
         headerEpg = r.epg;
+        headerTz = r.tz;
         loadedId = s.id;
     }
 
@@ -232,6 +235,7 @@ final class Store {
             all = r.list;
             visibleCache = null;
             headerEpg = r.epg;
+            headerTz = r.tz;
             loadedId = s.id;
             if (epg != null && s.id.equals(epgId)) Epg.attach(all, epg);
             notifyChanged();
@@ -256,6 +260,10 @@ final class Store {
         return u.startsWith("http://") || u.startsWith("https://") ? u : "";
     }
 
+    boolean epgLoading() {
+        return epgBusy;
+    }
+
     boolean hasEpg() {
         return epg != null && epgId != null && epgId.equals(loadedId);
     }
@@ -266,6 +274,13 @@ final class Store {
         if (url.isEmpty()) return;
         if (!force && epg != null && s.id.equals(epgId)) return;
         epgBusy = true;
+        final Set<String> wanted = new HashSet<>();
+        int days = 0;
+        for (Channel c : all) {
+            Epg.keys(c, wanted);
+            days = Math.max(days, Catchup.days(c, s));
+        }
+        final long past = Math.max(6 * 3600_000L, Math.min(days, 7) * 86_400_000L);
         epgBg.execute(() -> {
             File f = epgFile(s);
             String err = "";
@@ -282,7 +297,7 @@ final class Store {
                         err = describe(e);
                     }
                 }
-                m = Epg.parse(f);
+                m = Epg.parse(f, wanted, past);
             } catch (Exception e) {
                 err = describe(e);
             }
@@ -345,6 +360,14 @@ final class Store {
         recent.add(0, k);
         while (recent.size() > 30) recent.remove(recent.size() - 1);
         p.edit().putString("recent", new JSONArray(recent).toString()).putString("last", k).apply();
+    }
+
+    boolean preview() {
+        return p.getBoolean("preview", true);
+    }
+
+    void setPreview(boolean b) {
+        p.edit().putBoolean("preview", b).apply();
     }
 
     int fit() {

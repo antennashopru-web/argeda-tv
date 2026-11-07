@@ -8,10 +8,12 @@ import org.json.JSONObject;
 /** Источник каналов: ссылка M3U, учётная запись Xtream Codes или файл. Хранится только на устройстве. */
 final class Source {
     String id = "", name = "", type = "m3u", url = "", server = "", user = "", pass = "", epg = "", ua = "";
+    /** Тип архива: auto, shift, flussonic, xc, none. */
+    String archive = "auto";
 
     JSONObject toJson() throws JSONException {
         return new JSONObject().put("id", id).put("name", name).put("type", type).put("url", url)
-                .put("server", server).put("user", user).put("pass", pass).put("epg", epg).put("ua", ua);
+                .put("server", server).put("user", user).put("pass", pass).put("epg", epg).put("ua", ua).put("archive", archive);
     }
 
     static Source from(JSONObject o) {
@@ -25,6 +27,7 @@ final class Source {
         s.pass = o.optString("pass");
         s.epg = o.optString("epg");
         s.ua = o.optString("ua");
+        s.archive = o.optString("archive", "auto");
         return s;
     }
 

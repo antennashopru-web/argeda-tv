@@ -5,6 +5,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -20,12 +21,15 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.VH> {
 
         void longClick(int pos);
 
+        void focus(int pos);
+
         boolean key(int pos, int keyCode);
     }
 
     static final class VH extends RecyclerView.ViewHolder {
         final TextView num, initials, name, now, fav;
         final ImageView logo;
+        final ProgressBar prog;
 
         VH(View v) {
             super(v);
@@ -35,6 +39,7 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.VH> {
             now = v.findViewById(R.id.now);
             fav = v.findViewById(R.id.fav);
             logo = v.findViewById(R.id.logo);
+            prog = v.findViewById(R.id.prog);
         }
     }
 
@@ -77,6 +82,10 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.VH> {
             if (i != RecyclerView.NO_POSITION) l.longClick(i);
             return true;
         });
+        h.itemView.setOnFocusChangeListener((v, f) -> {
+            int i = h.getBindingAdapterPosition();
+            if (f && i != RecyclerView.NO_POSITION) l.focus(i);
+        });
         h.itemView.setOnKeyListener((v, code, e) -> {
             int i = h.getBindingAdapterPosition();
             return e.getAction() == KeyEvent.ACTION_DOWN && i != RecyclerView.NO_POSITION && l.key(i, code);
@@ -91,12 +100,16 @@ final class ChannelAdapter extends RecyclerView.Adapter<ChannelAdapter.VH> {
         h.name.setText(c.name);
         h.initials.setText(c.initials());
         Logos.show(h.logo, h.initials, c.logo);
-        Epg.Prog p = Epg.at(c.progs, System.currentTimeMillis());
+        long t = System.currentTimeMillis();
+        Epg.Prog p = Epg.at(c.progs, t);
         if (p != null && !p.title.isEmpty()) {
             h.now.setText(p.title);
             h.now.setVisibility(View.VISIBLE);
+            h.prog.setProgress((int) ((t - p.start) * 1000 / Math.max(1, p.stop - p.start)));
+            h.prog.setVisibility(View.VISIBLE);
         } else {
             h.now.setVisibility(View.GONE);
+            h.prog.setVisibility(View.GONE);
         }
         h.fav.setVisibility(st.isFav(c) ? View.VISIBLE : View.GONE);
         h.itemView.setSelected(c == current);

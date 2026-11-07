@@ -14,19 +14,25 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
-/** Телепрограмма XMLTV (.xml или .xml.gz). Хранится только окно «3 часа назад … 36 часов вперёд». */
+/**
+ * Телепрограмма XMLTV (.xml или .xml.gz). Хранятся только каналы из плейлиста и только окно
+ * «глубина архива назад … 2 суток вперёд»; описания — для ближайших суток.
+ */
 final class Epg {
     static final class Prog {
         final long start;
         long stop;
         final String title;
+        String desc;
 
         Prog(long start, long stop, String title) {
             this.start = start;
@@ -39,8 +45,25 @@ final class Epg {
 
     private Epg() {}
 
-    static Map<String, List<Prog>> parse(File f) throws IOException {
-        long now = System.currentTimeMillis(), from = now - 3 * 3600_000L, to = now + 36 * 3600_000L;
+    /** Ключи для сопоставления канала: tvg-id и название без «HD» и пометок. */
+    static void keys(Channel c, Set<String> out) {
+        if (!c.tvgId.isEmpty()) out.add("id:" + c.tvgId.toLowerCase(Locale.ROOT));
+        for (String n : new String[]{c.tvgName, c.name}) {
+            if (n.isEmpty()) continue;
+            out.add(norm(n));
+            out.add(norm(strip(n)));
+        }
+    }
+
+    /**
+     * @param wanted ключи каналов плейлиста (null — брать все)
+     * @param past   сколько миллисекунд прошлого хранить (для архива)
+     */
+    static Map<String, List<Prog>> parse(File f, Set<String> wanted, long past) throws IOException {
+        long now = System.currentTimeMillis(), from = now - past, to = now + 48 * 3600_000L;
+        long descFrom = now - 6 * 3600_000L, descTo = now + 24 * 3600_000L;
+        Set<String> accepted = new HashSet<>();
+        int channelsSeen = 0;
         Map<String, List<String>> names = new HashMap<>();
         Map<String, List<Prog>> progs = new HashMap<>();
         Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
@@ -51,7 +74,7 @@ final class Epg {
             } catch (XmlPullParserException ignored) {
             }
             x.setInput(in, null);
-            String chId = null, pCh = null, title = null;
+            String chId = null, pCh = null, title = null, desc = null;
             List<String> chNames = null;
             long ps = 0, pe = 0;
             try {
@@ -68,23 +91,34 @@ final class Epg {
                             ps = time(x.getAttributeValue(null, "start"), cal);
                             pe = time(x.getAttributeValue(null, "stop"), cal);
                             title = null;
-                            if (pCh == null || ps == 0 || ps > to || (pe != 0 && pe < from)) {
+                            desc = null;
+                            if (pCh == null || ps == 0 || ps > to || (pe != 0 && pe < from)
+                                    || (channelsSeen > 0 && wanted != null && !accepted.contains(pCh))) {
                                 pCh = null;
                                 skip(x);
                             }
                         } else if ("title".equals(t) && pCh != null && title == null) {
                             title = x.nextText().trim();
+                        } else if ("desc".equals(t) && pCh != null && desc == null && ps >= descFrom && ps <= descTo) {
+                            desc = x.nextText().trim();
+                            if (desc.length() > 400) desc = desc.substring(0, 400) + "…";
                         }
                     } else if (ev == XmlPullParser.END_TAG) {
                         String t = x.getName();
                         if ("channel".equals(t)) {
-                            if (chId != null && chNames != null) names.put(chId, chNames);
+                            channelsSeen++;
+                            if (chId != null && chNames != null) {
+                                names.put(chId, chNames);
+                                if (wanted == null || matches(chId, chNames, wanted)) accepted.add(chId);
+                            }
                             chId = null;
                             chNames = null;
                         } else if ("programme".equals(t) && pCh != null) {
                             List<Prog> l = progs.get(pCh);
                             if (l == null) progs.put(pCh, l = new ArrayList<>());
-                            l.add(new Prog(ps, pe, title == null ? "" : title));
+                            Prog pr = new Prog(ps, pe, title == null ? "" : title);
+                            pr.desc = desc;
+                            l.add(pr);
                             pCh = null;
                         }
                     }
@@ -125,6 +159,12 @@ final class Epg {
             if (l == null) l = find(m, c.name);
             c.progs = l;
         }
+    }
+
+    private static boolean matches(String id, List<String> names, Set<String> wanted) {
+        if (wanted.contains("id:" + id.toLowerCase(Locale.ROOT))) return true;
+        for (String n : names) if (wanted.contains(norm(n)) || wanted.contains(norm(strip(n)))) return true;
+        return false;
     }
 
     private static List<Prog> find(Map<String, List<Prog>> m, String name) {

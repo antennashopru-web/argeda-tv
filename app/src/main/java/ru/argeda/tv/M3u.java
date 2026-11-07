@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
 final class M3u {
     static final class Result {
         final List<Channel> list = new ArrayList<>();
-        String epg = "";
+        String epg = "", tz = "";
     }
 
     private static final Pattern ATTR = Pattern.compile("([A-Za-z0-9_-]+)=(?:\"([^\"]*)\"|'([^']*)'|([^\\s,\"']+))");
@@ -25,7 +25,8 @@ final class M3u {
         Result r = new Result();
         if (text == null) return r;
         Channel cur = null;
-        String sticky = "";
+        String sticky = "", defType = "", defSource = "";
+        int defDays = 0;
         int n = text.length(), i = 0;
         if (n > 0 && text.charAt(0) == '\uFEFF') i = 1;
         while (i < n) {
@@ -40,6 +41,10 @@ final class M3u {
                     Map<String, String> a = attrs(line);
                     String g = first(a, "url-tvg", "x-tvg-url", "tvg-url");
                     if (!g.isEmpty() && r.epg.isEmpty()) r.epg = g;
+                    defType = first(a, "catchup", "catchup-type");
+                    defSource = first(a, "catchup-source");
+                    defDays = toInt(first(a, "catchup-days", "tvg-rec", "timeshift"));
+                    r.tz = first(a, "x-timezone");
                 } else if (up.startsWith("#EXTINF")) {
                     cur = extinf(line);
                 } else if (up.startsWith("#EXTGRP:")) {
@@ -63,6 +68,9 @@ final class M3u {
             }
             cur.url = url;
             if (cur.group.isEmpty()) cur.group = sticky;
+            if (cur.catchupType.isEmpty()) cur.catchupType = defType;
+            if (cur.catchupSource.isEmpty()) cur.catchupSource = defSource;
+            if (cur.catchupDays == 0) cur.catchupDays = defDays;
             if (cur.name.isEmpty()) cur.name = !cur.tvgName.isEmpty() ? cur.tvgName : "Канал " + (r.list.size() + 1);
             cur.num = r.list.size() + 1;
             cur.adult = ADULT.matcher(cur.group).find() || ADULT.matcher(cur.name).find();
@@ -94,10 +102,9 @@ final class M3u {
         c.tvgName = first(a, "tvg-name");
         c.userAgent = first(a, "user-agent", "http-user-agent");
         c.referrer = first(a, "http-referrer", "referrer");
-        try {
-            c.catchupDays = Integer.parseInt(first(a, "catchup-days", "tvg-rec", "timeshift"));
-        } catch (NumberFormatException ignored) {
-        }
+        c.catchupDays = toInt(first(a, "catchup-days", "tvg-rec", "timeshift"));
+        c.catchupType = first(a, "catchup", "catchup-type");
+        c.catchupSource = first(a, "catchup-source");
         return c;
     }
 
@@ -128,6 +135,14 @@ final class M3u {
             m.put(x.group(1).toLowerCase(Locale.ROOT), v.trim());
         }
         return m;
+    }
+
+    private static int toInt(String s) {
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 
     private static String first(Map<String, String> a, String... keys) {

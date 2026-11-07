@@ -58,6 +58,9 @@
         <EditText android:id="@+id/ua" style="@style/Field" android:hint="оставьте пустым"
             android:inputType="text|textNoSuggestions" android:imeOptions="actionDone" />
 
+        <TextView style="@style/Label" android:text="Архив передач (если есть у провайдера)" />
+        <TextView android:id="@+id/archive" style="@style/Btn" android:text="Автоматически" />
+
         <TextView android:id="@+id/phone" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="20dp" android:background="@drawable/panel_bg" android:padding="16dp"
             android:textColor="@color/text" android:textSize="15sp" android:lineSpacingExtra="3dp" android:visibility="gone" />

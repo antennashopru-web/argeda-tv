@@ -6,6 +6,8 @@ import java.util.Locale;
 /** Канал из плейлиста пользователя. */
 final class Channel {
     String name = "", url = "", group = "", logo = "", tvgId = "", tvgName = "", userAgent = "", referrer = "";
+    /** Архив: тип (catchup), шаблон ссылки (catchup-source) и глубина в днях. */
+    String catchupType = "", catchupSource = "";
     int catchupDays;
     /** Номер по порядку в плейлисте, начиная с 1. */
     int num;
