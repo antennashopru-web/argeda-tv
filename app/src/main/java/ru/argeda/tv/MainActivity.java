@@ -94,6 +94,12 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     };
 
     @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(base);
+        Themes.apply(this, base, false);
+    }
+
+    @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         setContentView(R.layout.activity_main);
@@ -790,11 +796,21 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             items.add("Изменить PIN-код");
             acts.add(this::changePin);
         }
+        items.add("Тема: " + Themes.NAMES[Themes.get(this)]);
+        acts.add(this::chooseTheme);
         items.add("Проверить обновления");
         acts.add(() -> Updater.check(this, true));
         items.add("О приложении");
         acts.add(this::about);
         new AlertDialog.Builder(this).setItems(items.toArray(new String[0]), (d, w) -> acts.get(w).run()).show();
+    }
+
+    private void chooseTheme() {
+        new AlertDialog.Builder(this).setTitle("Тема оформления")
+                .setSingleChoiceItems(Themes.NAMES, Themes.get(this), (d, w) -> {
+                    d.dismiss();
+                    if (w != Themes.get(this)) Themes.set(this, w);
+                }).show();
     }
 
     private void toggleAdult() {

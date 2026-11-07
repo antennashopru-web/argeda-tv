@@ -37,6 +37,12 @@ public class SourceActivity extends Activity {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
 
     @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(base);
+        Themes.apply(this, base, false);
+    }
+
+    @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         setContentView(R.layout.activity_source);

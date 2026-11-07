@@ -95,7 +95,7 @@
             <TextView android:id="@+id/emptyBtn" android:layout_width="wrap_content" android:layout_height="48dp"
                 android:layout_marginTop="20dp" android:background="@drawable/btn_primary" android:focusable="true"
                 android:clickable="true" android:gravity="center" android:paddingStart="28dp" android:paddingEnd="28dp"
-                android:text="＋  Добавить плейлист" android:textColor="@color/text" android:textSize="16sp" android:textStyle="bold" />
+                android:text="＋  Добавить плейлист" android:textColor="@android:color/white" android:textSize="16sp" android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout android:id="@+id/loading" android:layout_width="match_parent" android:layout_height="match_parent"
