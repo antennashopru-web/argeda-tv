@@ -1,12 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#0B1220</color>
-    <color name="panel">#121C2E</color>
-    <color name="panel2">#1A263B</color>
-    <color name="accent">#E53935</color>
-    <color name="accent2">#FF8A65</color>
-    <color name="text">#F2F5FA</color>
-    <color name="muted">#94A3B8</color>
-    <color name="focus">#2B3D5C</color>
-    <color name="overlay">#CC0B1220</color>
+    <!-- Светлая тема ARGEDA TV -->
+    <color name="bg">#F4F2FA</color>
+    <color name="panel">#FFFFFF</color>
+    <color name="panel2">#FFFFFF</color>
+    <color name="accent">#7C3AED</color>
+    <color name="accentEnd">#A855F7</color>
+    <color name="accent2">#6D28D9</color>
+    <color name="accentLight">#7C3AED</color>
+    <color name="text">#1B1033</color>
+    <color name="muted">#6B6390</color>
+    <color name="dim">#8C85A8</color>
+    <color name="focus">#EDE7FD</color>
+    <color name="focusRing">#7C3AED</color>
+    <color name="selected">#EEE8FC</color>
+    <color name="live">#E11D48</color>
+    <color name="fav">#F59E0B</color>
+    <color name="onLight">#FFFFFF</color>
+    <color name="overlay">#F5FFFFFF</color>
+    <color name="border">#1A1B1033</color>
+    <color name="border2">#291B1033</color>
+    <color name="sideBg">#F7FFFFFF</color>
+    <color name="chBg">#FFFFFFFF</color>
+    <color name="logoBg">#EFEBF8</color>
+    <color name="tabText">#4B4370</color>
+    <color name="previewBorder">#4D7C3AED</color>
 </resources>

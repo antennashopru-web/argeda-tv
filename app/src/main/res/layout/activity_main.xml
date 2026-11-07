@@ -8,9 +8,14 @@
         android:orientation="horizontal" android:gravity="center_vertical"
         android:paddingStart="16dp" android:paddingEnd="12dp" android:paddingTop="10dp" android:paddingBottom="8dp">
 
-        <TextView android:id="@+id/brand" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:text="ARGEDA TV" android:textColor="@color/text" android:textSize="20sp" android:textStyle="bold" android:visibility="gone"
-            android:layout_marginEnd="12dp" />
+        <LinearLayout android:id="@+id/brand" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginEnd="14dp" android:visibility="gone">
+            <ImageView android:layout_width="34dp" android:layout_height="34dp" android:src="@drawable/brand_logo"
+                android:importantForAccessibility="no" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginStart="10dp"
+                android:text="@string/brand" android:textColor="@color/text" android:textSize="20sp" android:textStyle="bold"
+                android:letterSpacing="0.04" />
+        </LinearLayout>
 
         <TextView android:id="@+id/source" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1"
             android:background="@drawable/btn_bg" android:focusable="true" android:clickable="true"
@@ -42,7 +47,7 @@
                     android:layout_height="match_parent" app:use_controller="false" app:resize_mode="fit"
                     app:shutter_background_color="@android:color/black" android:focusable="false" />
                 <ProgressBar android:id="@+id/pBuf" android:layout_width="40dp" android:layout_height="40dp"
-                    android:layout_gravity="center" android:indeterminateTint="@color/accent" android:visibility="gone" />
+                    android:layout_gravity="center" android:indeterminateTint="@color/accentLight" android:visibility="gone" />
                 <TextView android:id="@+id/pMsg" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_gravity="center" android:layout_margin="12dp" android:gravity="center"
                     android:textColor="@color/text" android:textSize="13sp" android:visibility="gone" />
@@ -59,7 +64,7 @@
                 android:textColor="@color/muted" android:textSize="14sp" />
             <ProgressBar android:id="@+id/pProg" style="@android:style/Widget.Material.ProgressBar.Horizontal"
                 android:layout_width="match_parent" android:layout_height="4dp" android:layout_marginTop="6dp"
-                android:max="1000" android:progressTint="@color/accent" android:visibility="gone" />
+                android:max="1000" android:progressTint="@color/accentLight" android:progressBackgroundTint="@color/panel2" android:visibility="gone" />
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:layout_marginTop="10dp" android:layout_marginBottom="6dp" android:orientation="horizontal"
@@ -92,14 +97,14 @@
                 android:gravity="center" android:textColor="@color/muted" android:textSize="14sp"
                 android:text="Ссылка M3U, логин Xtream Codes или файл .m3u с телефона.\nВ приложении нет своих каналов — только ваши." />
             <TextView android:id="@+id/emptyBtn" android:layout_width="wrap_content" android:layout_height="48dp"
-                android:layout_marginTop="20dp" android:background="@drawable/btn_bg" android:focusable="true"
+                android:layout_marginTop="20dp" android:background="@drawable/btn_primary" android:focusable="true"
                 android:clickable="true" android:gravity="center" android:paddingStart="28dp" android:paddingEnd="28dp"
-                android:text="＋  Добавить плейлист" android:textColor="@color/text" android:textSize="16sp" />
+                android:text="＋  Добавить плейлист" android:textColor="@android:color/white" android:textSize="16sp" android:textStyle="bold" />
         </LinearLayout>
 
         <LinearLayout android:id="@+id/loading" android:layout_width="match_parent" android:layout_height="match_parent"
             android:orientation="vertical" android:gravity="center" android:visibility="gone">
-            <ProgressBar android:layout_width="48dp" android:layout_height="48dp" android:indeterminateTint="@color/accent" />
+            <ProgressBar android:layout_width="48dp" android:layout_height="48dp" android:indeterminateTint="@color/accentLight" />
             <TextView android:id="@+id/loadingText" android:layout_width="wrap_content" android:layout_height="wrap_content"
                 android:layout_marginTop="12dp" android:textColor="@color/muted" android:text="Загружаю плейлист…" />
         </LinearLayout>

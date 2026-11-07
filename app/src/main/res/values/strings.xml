@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ARGEDA TV</string>
+    <string name="brand">ARGEDA <font color="#7C3AED">TV</font></string>
 </resources>
