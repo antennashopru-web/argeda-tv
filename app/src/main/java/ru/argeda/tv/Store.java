@@ -20,6 +20,7 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,11 @@ final class Store {
         void changed();
     }
 
+    /**
+     * Телепрограмма для плейлистов, где её нет: бесплатная iptvx.one, ~4300 каналов (РФ, СНГ, Европа),
+     * облегчённая версия без описаний — 15 МБ вместо 70. Каналы сопоставляются по названию.
+     */
+    static final String DEFAULT_EPG = "https://iptvx.one/EPG_LITE";
     private static final long PLAYLIST_TTL = 6 * 3600_000L, EPG_TTL = 12 * 3600_000L;
     private static Store inst;
 
@@ -73,6 +79,7 @@ final class Store {
     Listener listener;
 
     private Map<String, List<Epg.Prog>> epg;
+    private Map<String, String> epgIcons;
     private String epgId;
     private boolean epgBusy;
     String epgStatus = "";
@@ -226,6 +233,10 @@ final class Store {
         headerEpg = r.epg;
         headerTz = r.tz;
         loadedId = s.id;
+        final List<Channel> list = all;
+        LogoDb.apply(app, list, () -> {
+            if (all == list) notifyChanged();
+        });
     }
 
     private void deliver(int g, Source s, String text) {
@@ -237,7 +248,11 @@ final class Store {
             headerEpg = r.epg;
             headerTz = r.tz;
             loadedId = s.id;
-            if (epg != null && s.id.equals(epgId)) Epg.attach(all, epg);
+            if (epg != null && s.id.equals(epgId)) Epg.attach(all, epg, epgIcons);
+            final List<Channel> list = all;
+            LogoDb.apply(app, list, () -> {
+                if (all == list) notifyChanged();
+            });
             notifyChanged();
         });
     }
@@ -257,7 +272,7 @@ final class Store {
         int comma = u.indexOf(',');
         if (comma > 0) u = u.substring(0, comma);
         u = u.trim();
-        return u.startsWith("http://") || u.startsWith("https://") ? u : "";
+        return u.startsWith("http://") || u.startsWith("https://") ? u : DEFAULT_EPG;
     }
 
     boolean epgLoading() {
@@ -285,6 +300,7 @@ final class Store {
             File f = epgFile(s);
             String err = "";
             Map<String, List<Epg.Prog>> m = null;
+            final Map<String, String> icons = new HashMap<>();
             try {
                 if (force || !f.exists() || System.currentTimeMillis() - f.lastModified() > EPG_TTL) {
                     File tmp = new File(f.getPath() + ".part");
@@ -297,7 +313,7 @@ final class Store {
                         err = describe(e);
                     }
                 }
-                m = Epg.parse(f, wanted, past);
+                m = Epg.parse(f, wanted, past, icons);
             } catch (Exception e) {
                 err = describe(e);
             }
@@ -308,8 +324,9 @@ final class Store {
                 epgStatus = fe;
                 if (fm != null) {
                     epg = fm;
+                    epgIcons = icons;
                     epgId = s.id;
-                    if (s.id.equals(loadedId)) Epg.attach(all, fm);
+                    if (s.id.equals(loadedId)) Epg.attach(all, fm, icons);
                 }
                 notifyChanged();
             });

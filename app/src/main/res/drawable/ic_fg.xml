@@ -1,8 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Значок в стиле ARGEDA: белая вертушка из семи лопастей и «плей» в центре -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#F2F5FA" android:pathData="M30,36 h48 a6,6 0 0 1 6,6 v26 a6,6 0 0 1 -6,6 h-48 a6,6 0 0 1 -6,-6 v-26 a6,6 0 0 1 6,-6 z" />
-    <path android:fillColor="#0B1220" android:pathData="M32,40 h44 a3,3 0 0 1 3,3 v24 a3,3 0 0 1 -3,3 h-44 a3,3 0 0 1 -3,-3 v-24 a3,3 0 0 1 3,-3 z" />
-    <path android:fillColor="#E53935" android:pathData="M48,46 L64,55 L48,64 Z" />
-    <path android:fillColor="#F2F5FA" android:pathData="M44,78 h20 v3 h-20 z" />
+  <group android:pivotX="54" android:pivotY="54" android:scaleX="0.95" android:scaleY="0.95">
+    <group android:pivotX="54" android:pivotY="54" android:rotation="0.000">
+      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="51.429">
+      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="102.857">
+      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="154.286">
+      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="205.714">
+      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="257.143">
+      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    </group>
+    <group android:pivotX="54" android:pivotY="54" android:rotation="308.571">
+      <path android:fillColor="#FFFFFF" android:pathData="M53.6,47.5 C50,42 47,35 49,28.5 C51,22.3 60.5,20 66,24.8 C60.5,27.5 57.6,34 57.8,46.5 Q55.8,48.6 53.6,47.5 Z" />
+    </group>
+  </group>
+  <path android:fillColor="#FFFFFF" android:strokeColor="#FFFFFF" android:strokeWidth="0.8" android:strokeLineJoin="round" android:pathData="M51.3,50.2 L59,54 L51.3,57.8 Z" />
 </vector>

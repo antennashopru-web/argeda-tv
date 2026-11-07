@@ -1,0 +1,31 @@
+name: Логотипы
+
+# Раз в неделю обновляет базу логотипов (ветка data, файл logos.tsv.gz).
+# Приложение берёт из неё картинки для каналов, у которых в плейлисте нет tvg-logo.
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  logos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Сборка базы
+        run: python3 tools/logos.py "$RUNNER_TEMP/logos.tsv.gz"
+      - name: Публикация в ветку data
+        run: |
+          cd "$RUNNER_TEMP"
+          rm -rf data && mkdir data && cd data
+          git init -q -b data
+          cp ../logos.tsv.gz .
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" add logos.tsv.gz
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Логотипы $(date -u +%F)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" data

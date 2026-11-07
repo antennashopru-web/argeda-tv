@@ -45,21 +45,49 @@ final class Epg {
 
     private Epg() {}
 
+    /** «НТВ +4 (Томск)», «ITV4 +1 UK»: сдвиг по времени относительно основного канала. */
+    private static final Pattern SHIFTED = Pattern.compile("^(.*\\S)\\s*\\+(\\d{1,2})\\b(.*)$");
+    private static final Pattern CYR = Pattern.compile("[\\u0400-\\u04FF]");
+
     /** Ключи для сопоставления канала: tvg-id и название без «HD» и пометок. */
     static void keys(Channel c, Set<String> out) {
         if (!c.tvgId.isEmpty()) out.add("id:" + c.tvgId.toLowerCase(Locale.ROOT));
         for (String n : new String[]{c.tvgName, c.name}) {
             if (n.isEmpty()) continue;
-            out.add(norm(n));
-            out.add(norm(strip(n)));
+            Collections.addAll(out, names(n));
+            String b = base(n);
+            if (b != null) Collections.addAll(out, names(b));
         }
+    }
+
+    /** Варианты названия от точного к вольному: «Матч ТВ HD RU» → матчтвhdru, матчтвru, матчтв, матч. */
+    private static String[] names(String n) {
+        String l = LogoDb.key(n, false);
+        return new String[]{norm(n), norm(strip(n)), l, LogoDb.noTv(l)};
+    }
+
+    /** Название основного канала для «Звезда +4 (Алтай)» → «Звезда (Алтай)»; null — сдвига нет. */
+    private static String base(String n) {
+        java.util.regex.Matcher m = SHIFTED.matcher(n.trim());
+        return m.matches() ? m.group(1) + m.group(3) : null;
+    }
+
+    /**
+     * Насколько сдвинута программа «+N»-канала. Российские дубли («Первый +4») идут для восточных
+     * часовых поясов и выходят на N часов раньше Москвы; зарубежные («ITV4 +1») — на N часов позже.
+     */
+    private static long shift(String n) {
+        java.util.regex.Matcher m = SHIFTED.matcher(n.trim());
+        if (!m.matches()) return 0;
+        long h = Long.parseLong(m.group(2)) * 3600_000L;
+        return CYR.matcher(n).find() ? -h : h;
     }
 
     /**
      * @param wanted ключи каналов плейлиста (null — брать все)
      * @param past   сколько миллисекунд прошлого хранить (для архива)
      */
-    static Map<String, List<Prog>> parse(File f, Set<String> wanted, long past) throws IOException {
+    static Map<String, List<Prog>> parse(File f, Set<String> wanted, long past, Map<String, String> icons) throws IOException {
         long now = System.currentTimeMillis(), from = now - past, to = now + 48 * 3600_000L;
         long descFrom = now - 6 * 3600_000L, descTo = now + 24 * 3600_000L;
         Set<String> accepted = new HashSet<>();
@@ -74,7 +102,7 @@ final class Epg {
             } catch (XmlPullParserException ignored) {
             }
             x.setInput(in, null);
-            String chId = null, pCh = null, title = null, desc = null;
+            String chId = null, chIcon = null, pCh = null, title = null, desc = null;
             List<String> chNames = null;
             long ps = 0, pe = 0;
             try {
@@ -83,7 +111,11 @@ final class Epg {
                         String t = x.getName();
                         if ("channel".equals(t)) {
                             chId = x.getAttributeValue(null, "id");
+                            chIcon = null;
                             chNames = new ArrayList<>();
+                        } else if ("icon".equals(t) && chNames != null && chIcon == null) {
+                            String src = x.getAttributeValue(null, "src");
+                            if (src != null && (src.startsWith("http://") || src.startsWith("https://"))) chIcon = src.trim();
                         } else if ("display-name".equals(t) && chNames != null) {
                             chNames.add(x.nextText().trim());
                         } else if ("programme".equals(t)) {
@@ -109,7 +141,14 @@ final class Epg {
                             channelsSeen++;
                             if (chId != null && chNames != null) {
                                 names.put(chId, chNames);
-                                if (wanted == null || matches(chId, chNames, wanted)) accepted.add(chId);
+                                if (wanted == null || matches(chId, chNames, wanted)) {
+                                    accepted.add(chId);
+                                    if (chIcon != null && icons != null) {
+                                        icons.put("id:" + chId.toLowerCase(Locale.ROOT), chIcon);
+                                        for (String n : chNames)
+                                            for (String k : names(n)) if (!k.isEmpty() && !icons.containsKey(k)) icons.put(k, chIcon);
+                                    }
+                                }
                             }
                             chId = null;
                             chNames = null;
@@ -141,35 +180,74 @@ final class Epg {
             out.put("id:" + e.getKey().toLowerCase(Locale.ROOT), l);
             List<String> ns = names.get(e.getKey());
             if (ns == null) continue;
-            for (String n : ns) {
-                putIfAbsent(out, norm(n), l);
-                putIfAbsent(out, norm(strip(n)), l);
-            }
+            for (String n : ns) for (String k : names(n)) putIfAbsent(out, k, l);
         }
         return out;
     }
 
-    /** Подбирает программу каналам: по tvg-id, затем по названию (без «HD», «UHD» и т. п.). */
-    static void attach(List<Channel> chs, Map<String, List<Prog>> m) {
+    /**
+     * Подбирает программу каналам: по tvg-id, затем по названию (без «HD», «UHD» и т. п.).
+     * Каналам без tvg-logo в плейлисте отдаёт логотип из телепрограммы (тег icon).
+     */
+    static void attach(List<Channel> chs, Map<String, List<Prog>> m, Map<String, String> icons) {
         if (m == null) return;
         for (Channel c : chs) {
+            if ((c.logo.isEmpty() || c.logoGuessed) && icons != null && !icons.isEmpty()) {
+                String ic = null;
+                if (!c.tvgId.isEmpty()) ic = icons.get("id:" + c.tvgId.toLowerCase(Locale.ROOT));
+                if (ic == null && !c.tvgName.isEmpty()) ic = icon(icons, c.tvgName);
+                if (ic == null) ic = icon(icons, c.name);
+                if (ic != null) {
+                    c.logo = ic;
+                    c.logoGuessed = false;
+                }
+            }
             List<Prog> l = null;
             if (!c.tvgId.isEmpty()) l = m.get("id:" + c.tvgId.toLowerCase(Locale.ROOT));
             if (l == null && !c.tvgName.isEmpty()) l = find(m, c.tvgName);
             if (l == null) l = find(m, c.name);
+            if (l == null) {
+                // Нет своей программы у «+N»-дубля — берём основной канал и сдвигаем время.
+                String b = base(c.name);
+                List<Prog> src = b == null ? null : find(m, b);
+                if (src != null) l = shifted(src, shift(c.name));
+            }
             c.progs = l;
         }
     }
 
+    private static String icon(Map<String, String> icons, String name) {
+        for (String k : names(name)) {
+            String s = icons.get(k);
+            if (s != null) return s;
+        }
+        String b = base(name);
+        return b == null ? null : icon(icons, b);
+    }
+
     private static boolean matches(String id, List<String> names, Set<String> wanted) {
         if (wanted.contains("id:" + id.toLowerCase(Locale.ROOT))) return true;
-        for (String n : names) if (wanted.contains(norm(n)) || wanted.contains(norm(strip(n)))) return true;
+        for (String n : names) for (String k : names(n)) if (!k.isEmpty() && wanted.contains(k)) return true;
         return false;
     }
 
     private static List<Prog> find(Map<String, List<Prog>> m, String name) {
-        List<Prog> l = m.get(norm(name));
-        return l != null ? l : m.get(norm(strip(name)));
+        for (String k : names(name)) {
+            List<Prog> l = m.get(k);
+            if (l != null) return l;
+        }
+        return null;
+    }
+
+    private static List<Prog> shifted(List<Prog> src, long by) {
+        if (by == 0) return src;
+        List<Prog> l = new ArrayList<>(src.size());
+        for (Prog p : src) {
+            Prog q = new Prog(p.start + by, p.stop + by, p.title);
+            q.desc = p.desc;
+            l.add(q);
+        }
+        return l;
     }
 
     static Prog at(List<Prog> l, long t) {
