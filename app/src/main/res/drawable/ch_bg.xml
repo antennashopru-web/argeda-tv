@@ -11,6 +11,6 @@
         <shape><solid android:color="@color/focus" /><corners android:radius="16dp" /></shape>
     </item>
     <item>
-        <shape><solid android:color="#99161127" /><corners android:radius="16dp" /></shape>
+        <shape><solid android:color="@color/chBg" /><corners android:radius="16dp" /></shape>
     </item>
 </selector>

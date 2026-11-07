@@ -78,6 +78,12 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     };
 
     @Override
+    protected void attachBaseContext(android.content.Context base) {
+        super.attachBaseContext(base);
+        Themes.apply(this, base, true);
+    }
+
+    @Override
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         setContentView(R.layout.activity_player);
