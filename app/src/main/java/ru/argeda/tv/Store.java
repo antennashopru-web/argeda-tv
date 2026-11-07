@@ -20,6 +20,7 @@ import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +74,7 @@ final class Store {
     Listener listener;
 
     private Map<String, List<Epg.Prog>> epg;
+    private Map<String, String> epgIcons;
     private String epgId;
     private boolean epgBusy;
     String epgStatus = "";
@@ -237,7 +239,7 @@ final class Store {
             headerEpg = r.epg;
             headerTz = r.tz;
             loadedId = s.id;
-            if (epg != null && s.id.equals(epgId)) Epg.attach(all, epg);
+            if (epg != null && s.id.equals(epgId)) Epg.attach(all, epg, epgIcons);
             notifyChanged();
         });
     }
@@ -285,6 +287,7 @@ final class Store {
             File f = epgFile(s);
             String err = "";
             Map<String, List<Epg.Prog>> m = null;
+            final Map<String, String> icons = new HashMap<>();
             try {
                 if (force || !f.exists() || System.currentTimeMillis() - f.lastModified() > EPG_TTL) {
                     File tmp = new File(f.getPath() + ".part");
@@ -297,7 +300,7 @@ final class Store {
                         err = describe(e);
                     }
                 }
-                m = Epg.parse(f, wanted, past);
+                m = Epg.parse(f, wanted, past, icons);
             } catch (Exception e) {
                 err = describe(e);
             }
@@ -308,8 +311,9 @@ final class Store {
                 epgStatus = fe;
                 if (fm != null) {
                     epg = fm;
+                    epgIcons = icons;
                     epgId = s.id;
-                    if (s.id.equals(loadedId)) Epg.attach(all, fm);
+                    if (s.id.equals(loadedId)) Epg.attach(all, fm, icons);
                 }
                 notifyChanged();
             });

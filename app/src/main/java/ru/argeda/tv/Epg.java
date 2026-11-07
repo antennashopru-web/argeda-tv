@@ -59,7 +59,7 @@ final class Epg {
      * @param wanted ключи каналов плейлиста (null — брать все)
      * @param past   сколько миллисекунд прошлого хранить (для архива)
      */
-    static Map<String, List<Prog>> parse(File f, Set<String> wanted, long past) throws IOException {
+    static Map<String, List<Prog>> parse(File f, Set<String> wanted, long past, Map<String, String> icons) throws IOException {
         long now = System.currentTimeMillis(), from = now - past, to = now + 48 * 3600_000L;
         long descFrom = now - 6 * 3600_000L, descTo = now + 24 * 3600_000L;
         Set<String> accepted = new HashSet<>();
@@ -74,7 +74,7 @@ final class Epg {
             } catch (XmlPullParserException ignored) {
             }
             x.setInput(in, null);
-            String chId = null, pCh = null, title = null, desc = null;
+            String chId = null, chIcon = null, pCh = null, title = null, desc = null;
             List<String> chNames = null;
             long ps = 0, pe = 0;
             try {
@@ -83,7 +83,11 @@ final class Epg {
                         String t = x.getName();
                         if ("channel".equals(t)) {
                             chId = x.getAttributeValue(null, "id");
+                            chIcon = null;
                             chNames = new ArrayList<>();
+                        } else if ("icon".equals(t) && chNames != null && chIcon == null) {
+                            String src = x.getAttributeValue(null, "src");
+                            if (src != null && (src.startsWith("http://") || src.startsWith("https://"))) chIcon = src.trim();
                         } else if ("display-name".equals(t) && chNames != null) {
                             chNames.add(x.nextText().trim());
                         } else if ("programme".equals(t)) {
@@ -109,7 +113,16 @@ final class Epg {
                             channelsSeen++;
                             if (chId != null && chNames != null) {
                                 names.put(chId, chNames);
-                                if (wanted == null || matches(chId, chNames, wanted)) accepted.add(chId);
+                                if (wanted == null || matches(chId, chNames, wanted)) {
+                                    accepted.add(chId);
+                                    if (chIcon != null && icons != null) {
+                                        icons.put("id:" + chId.toLowerCase(Locale.ROOT), chIcon);
+                                        for (String n : chNames) {
+                                            if (!icons.containsKey(norm(n))) icons.put(norm(n), chIcon);
+                                            if (!icons.containsKey(norm(strip(n)))) icons.put(norm(strip(n)), chIcon);
+                                        }
+                                    }
+                                }
                             }
                             chId = null;
                             chNames = null;
@@ -149,16 +162,31 @@ final class Epg {
         return out;
     }
 
-    /** Подбирает программу каналам: по tvg-id, затем по названию (без «HD», «UHD» и т. п.). */
-    static void attach(List<Channel> chs, Map<String, List<Prog>> m) {
+    /**
+     * Подбирает программу каналам: по tvg-id, затем по названию (без «HD», «UHD» и т. п.).
+     * Каналам без tvg-logo в плейлисте отдаёт логотип из телепрограммы (тег icon).
+     */
+    static void attach(List<Channel> chs, Map<String, List<Prog>> m, Map<String, String> icons) {
         if (m == null) return;
         for (Channel c : chs) {
+            if (c.logo.isEmpty() && icons != null && !icons.isEmpty()) {
+                String ic = null;
+                if (!c.tvgId.isEmpty()) ic = icons.get("id:" + c.tvgId.toLowerCase(Locale.ROOT));
+                if (ic == null && !c.tvgName.isEmpty()) ic = icon(icons, c.tvgName);
+                if (ic == null) ic = icon(icons, c.name);
+                if (ic != null) c.logo = ic;
+            }
             List<Prog> l = null;
             if (!c.tvgId.isEmpty()) l = m.get("id:" + c.tvgId.toLowerCase(Locale.ROOT));
             if (l == null && !c.tvgName.isEmpty()) l = find(m, c.tvgName);
             if (l == null) l = find(m, c.name);
             c.progs = l;
         }
+    }
+
+    private static String icon(Map<String, String> icons, String name) {
+        String s = icons.get(norm(name));
+        return s != null ? s : icons.get(norm(strip(name)));
     }
 
     private static boolean matches(String id, List<String> names, Set<String> wanted) {
