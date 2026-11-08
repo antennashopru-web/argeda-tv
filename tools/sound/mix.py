@@ -1,6 +1,6 @@
 """Сводит звук заставки ARGEDA TV из материалов ElevenLabs.
 
-Вариант N: мощный звук tools/sound/v/fx_N.mp3 (его пик совпадает с «ударом» анимации, Splash.HIT = 0,62 с;
+Вариант N: мощный звук tools/sound/v/fx_N.mp3 (его пик совпадает с «ударом» анимации, Splash.HIT = 1,30 с;
 перед ним — обратный «засос» этого же звука) и басовый голос tools/sound/v/voice_N.mp3 сразу после удара.
 Запуск из корня репозитория:
   python3 tools/sound/mix.py N out.mp3        — собрать вариант N в файл
@@ -12,7 +12,7 @@ import sys
 import numpy as np
 
 SR = 44100
-HIT = 0.62
+HIT = 1.30
 VOICE_AT = HIT + 0.33
 
 
@@ -50,11 +50,11 @@ def build(n, out):
     mus = np.zeros(int(total * SR))
     p = peak_time(fx)
     fx_at = HIT - p / SR
-    # если у звука нет своего нарастания, добавляем «засос»: тот же звук задом наперёд перед ударом
-    if p / SR < 0.25:
-        rev = fx[: int(0.5 * SR)][::-1].copy()
-        rev *= np.linspace(0, 1, len(rev)) ** 2
-        place(mus, rev, HIT - len(rev) / SR, 0.6)
+    # «зарядка» перед ударом: тот же звук задом наперёд, нарастающий около секунды
+    body = fx[p:]
+    rev = np.tile(body, int(np.ceil(SR * 1.1 / max(len(body), 1))))[: int(1.1 * SR)][::-1].copy()
+    rev *= np.linspace(0, 1, len(rev)) ** 3
+    place(mus, rev, HIT - len(rev) / SR, 0.55 if p / SR < 0.25 else 0.3)
     place(mus, fx, fx_at, 1.0)
     # хвост-эхо делает удар больше
     echo = np.zeros_like(mus)
