@@ -100,6 +100,9 @@ final class EpgAdapter extends RecyclerView.Adapter<EpgAdapter.VH> {
     }
 
     @SuppressWarnings("NotifyDataSetChanged")
+    /** Канал, чья это телепрограмма: по нему отмечаются передачи с напоминанием. */
+    Channel channel;
+
     void set(List<Row> r) {
         rows = r;
         notifyDataSetChanged();
@@ -153,6 +156,10 @@ final class EpgAdapter extends RecyclerView.Adapter<EpgAdapter.VH> {
         } else if (r.archive) {
             h.mark.setVisibility(View.VISIBLE);
             h.mark.setText("ЗАПИСЬ");
+            h.mark.setBackgroundResource(R.drawable.mark_bg);
+        } else if (r.future && channel != null && Alerts.has(h.itemView.getContext(), channel, r.p.start)) {
+            h.mark.setVisibility(View.VISIBLE);
+            h.mark.setText("НАПОМНЮ");
             h.mark.setBackgroundResource(R.drawable.mark_bg);
         } else h.mark.setVisibility(View.GONE);
         h.row.setSelected(playing == 0 ? r.now : r.p.start == playing);
