@@ -1,0 +1,31 @@
+# Временный: забирает сгенерированную озвучку «ARGEDA TV» в res/raw (из облачной среды хост недоступен).
+name: Озвучка заставки
+on:
+  push:
+    branches: ['claude/project-thread-awe1ca']
+    paths: ['.github/workflows/fetch-voice.yml']
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg >/dev/null
+          curl -fsSL -o a.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/Mv3MFvnSFmn6Pj3r2bS8/TI6LirBTwyWJAT96Zdq0/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=SYEkKysMyk9VR3xpFBcORgnWbzA="
+          curl -fsSL -o b.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/gBKcWlrEnbqzb42LhdPo/Xeahh0miEX9jyH4tUf3g/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=apXGORZRi2GyXkl2VUC9XtalOsg="
+          mkdir -p app/src/main/res/raw tools/voice
+          # тишина в начале убрана, громкость выровнена, моно 44.1 кГц
+          for f in a b; do
+            ffmpeg -hide_banner -loglevel error -y -i $f.mp3 \
+              -af "silenceremove=start_periods=1:start_threshold=-45dB,areverse,silenceremove=start_periods=1:start_threshold=-45dB,areverse,loudnorm=I=-14:TP=-1.5" \
+              -ac 1 -ar 44100 -c:a libmp3lame -b:a 96k tools/voice/take_$f.mp3
+          done
+          cp tools/voice/take_a.mp3 app/src/main/res/raw/argeda_tv.mp3
+          ls -la tools/voice app/src/main/res/raw
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/res/raw tools/voice
+          git commit -m "Озвучка «ARGEDA TV» для заставки"
+          git push
