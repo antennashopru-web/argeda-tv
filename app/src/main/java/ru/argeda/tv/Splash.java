@@ -34,7 +34,7 @@ import java.util.Random;
  * Заставка при запуске под звук res/raw/argeda_tv.mp3 (мощный удар + басовый голос «ARGEDA TV»).
  *
  * <p>Сцены (мс): 0–{@link #HIT} — «зарядка»: искры по спирали стягиваются в светящееся ядро, из него
- * появляется плитка знака с раскрученными лопастями. {@link #HIT} — удар: вспышка, встряска, экран с Play,
+ * появляется плитка знака: экран с Play, под ним сложенные лопасти. {@link #HIT} — удар: лопасти раскрываются веером, вспышка, встряска,
  * ударные кольца, взрыв искр, лучи. Затем надпись по буквам и голос, блик, вокруг знака кружат огоньки.
  * {@link #HOLD} — финал: пролёт сквозь знак (он стремительно растёт и растворяется).
  *
@@ -109,8 +109,15 @@ final class Splash {
         });
         logo.setClipToOutline(true);
         logo.setElevation(dp(16));
-        ImageView blades = new ImageView(a);
-        blades.setImageResource(R.drawable.splash_blades);
+        FrameLayout blades = new FrameLayout(a);
+        int[] bladeRes = {R.drawable.splash_blade_1, R.drawable.splash_blade_2, R.drawable.splash_blade_3,
+                R.drawable.splash_blade_4, R.drawable.splash_blade_5, R.drawable.splash_blade_6};
+        ImageView[] blade = new ImageView[bladeRes.length];
+        for (int i = 0; i < bladeRes.length; i++) {
+            blade[i] = new ImageView(a);
+            blade[i].setImageResource(bladeRes[i]);
+            blades.addView(blade[i], new FrameLayout.LayoutParams(size, size));
+        }
         ImageView screen = new ImageView(a);
         screen.setImageResource(R.drawable.splash_screen);
         View shine = new View(a);
@@ -161,13 +168,26 @@ final class Splash {
         logo.setRotation(-45f);
         logo.animate().scaleX(1f).scaleY(1f).rotation(0f).setStartDelay(born).setDuration(520)
                 .setInterpolator(new OvershootInterpolator(1.5f));
-        // Лопасти: три оборота с замедлением, останавливаются на ударе.
-        blades.setRotation(-1080f);
-        blades.animate().rotation(0f).setStartDelay(born).setDuration(420 + 160).setInterpolator(new DecelerateInterpolator(1.6f));
-        // Экран с Play выпрыгивает на удар.
+        // Лопасти сначала сложены веером под экраном (все в одном месте и уменьшены),
+        // знак слегка доворачивается, а на удар лопасти раскрываются одна за другой.
+        blades.setRotation(-120f);
+        blades.animate().rotation(0f).setStartDelay(born).setDuration(420 + 260).setInterpolator(new DecelerateInterpolator(1.6f));
+        for (int i = 0; i < blade.length; i++) {
+            ImageView b = blade[i];
+            b.setRotation(-60f * i);
+            b.setScaleX(0.45f);
+            b.setScaleY(0.45f);
+            b.animate().rotation(0f).scaleX(1f).scaleY(1f).setStartDelay(HIT - 40 + i * 45L).setDuration(520)
+                    .setInterpolator(new OvershootInterpolator(1.4f));
+        }
+        // Экран с Play появляется вместе с плиткой и прикрывает сложенные лопасти, на удар — толчок.
         screen.setScaleX(0f);
         screen.setScaleY(0f);
-        screen.animate().scaleX(1f).scaleY(1f).setStartDelay(HIT - 30).setDuration(440).setInterpolator(new OvershootInterpolator(2.6f));
+        screen.animate().scaleX(1f).scaleY(1f).setStartDelay(born + 80).setDuration(380).setInterpolator(new OvershootInterpolator(2f))
+                .withEndAction(() -> screen.animate().scaleX(1.18f).scaleY(1.18f).setStartDelay(Math.max(0, HIT - 30 - born - 460)).setDuration(120)
+                        .setInterpolator(new DecelerateInterpolator())
+                        .withEndAction(() -> screen.animate().scaleX(1f).scaleY(1f).setStartDelay(0).setDuration(380)
+                                .setInterpolator(new OvershootInterpolator(2.6f))));
         // Удар: плитка «вздыхает», вся сцена вздрагивает.
         root.postDelayed(() -> {
             if (closing) return;
