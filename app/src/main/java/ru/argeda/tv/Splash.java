@@ -34,7 +34,7 @@ import java.util.Random;
  * Заставка при запуске под звук res/raw/argeda_tv.mp3 (мощный удар + басовый голос «ARGEDA TV»).
  *
  * <p>Сцены (мс): 0–{@link #HIT} — «зарядка»: искры по спирали стягиваются в светящееся ядро, из него
- * появляется плитка знака, лопасти складываются, экран с Play прилетает и «прилипает». {@link #HIT} — удар: лопасти раскрываются веером, вспышка, встряска,
+ * появляется круглый знак, вихрь закручивается к центру, экран с Play прилетает и «прилипает». {@link #HIT} — удар: вихрь раскрывается, вспышка, встряска,
  * ударные кольца, взрыв искр, лучи. Затем надпись по буквам и голос, блик, вокруг знака кружат огоньки.
  * {@link #HOLD} — финал: пролёт сквозь знак (он стремительно растёт и растворяется).
  *
@@ -94,36 +94,25 @@ final class Splash {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setGravity(Gravity.CENTER_HORIZONTAL);
 
-        // Плитка знака: белая, скруглённая; всё внутри обрезается по её форме, чтобы блик не вылезал.
+        // Круглый знак, как в шапке приложения: вихрь из трёх цветов и экран с Play поверх.
+        // Всё внутри обрезается по кругу, чтобы блик не вылезал.
         FrameLayout logo = new FrameLayout(a);
-        GradientDrawable white = new GradientDrawable();
-        white.setColor(Color.WHITE);
-        white.setCornerRadius(dp(36));
-        logo.setBackground(white);
-        final float r = dp(36);
         logo.setOutlineProvider(new ViewOutlineProvider() {
             @Override
             public void getOutline(View view, Outline o) {
-                o.setRoundRect(0, 0, view.getWidth(), view.getHeight(), r);
+                o.setOval(0, 0, view.getWidth(), view.getHeight());
             }
         });
         logo.setClipToOutline(true);
         logo.setElevation(dp(16));
-        FrameLayout blades = new FrameLayout(a);
-        int[] bladeRes = {R.drawable.splash_blade_1, R.drawable.splash_blade_2, R.drawable.splash_blade_3,
-                R.drawable.splash_blade_4, R.drawable.splash_blade_5, R.drawable.splash_blade_6};
-        ImageView[] blade = new ImageView[bladeRes.length];
-        for (int i = 0; i < bladeRes.length; i++) {
-            blade[i] = new ImageView(a);
-            blade[i].setImageResource(bladeRes[i]);
-            blades.addView(blade[i], new FrameLayout.LayoutParams(size, size));
-        }
+        ImageView ring = new ImageView(a);
+        ring.setImageResource(R.drawable.splash_ring);
         ImageView screen = new ImageView(a);
-        screen.setImageResource(R.drawable.splash_screen);
+        screen.setImageResource(R.drawable.splash_play);
         View shine = new View(a);
         shine.setBackground(new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
                 new int[]{0x00FFFFFF, 0xB3FFFFFF, 0x00FFFFFF}));
-        logo.addView(blades, new FrameLayout.LayoutParams(size, size));
+        logo.addView(ring, new FrameLayout.LayoutParams(size, size));
         logo.addView(screen, new FrameLayout.LayoutParams(size, size));
         logo.addView(shine, new FrameLayout.LayoutParams(size / 3, size * 2, Gravity.CENTER_VERTICAL));
         col.addView(logo, new LinearLayout.LayoutParams(size, size));
@@ -161,30 +150,25 @@ final class Splash {
         root.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
         a.addContentView(root, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Плитка рождается из ядра в конце «зарядки».
+        // Знак рождается из ядра в конце «зарядки».
         long born = HIT - 420;
         logo.setScaleX(0f);
         logo.setScaleY(0f);
         logo.setRotation(-45f);
         logo.animate().scaleX(1f).scaleY(1f).rotation(0f).setStartDelay(born).setDuration(520)
                 .setInterpolator(new OvershootInterpolator(1.5f));
-        // Лопасти: плитка рождается с раскрытыми лопастями, они складываются веером в центр
-        // (все в одно место и уменьшаются), а на удар снова раскрываются одна за другой.
-        blades.setRotation(-120f);
-        blades.animate().rotation(0f).setStartDelay(born).setDuration(420 + 260).setInterpolator(new DecelerateInterpolator(1.6f));
-        for (int i = 0; i < blade.length; i++) {
-            ImageView b = blade[i];
-            final long k = i;
-            b.animate().rotation(-60f * i).scaleX(0.45f).scaleY(0.45f).setStartDelay(born + 100 + (5 - k) * 18L).setDuration(200)
-                    .setInterpolator(new AccelerateInterpolator(1.4f))
-                    .withEndAction(() -> {
-                        if (closing) return;
-                        long wait = Math.max(0, (HIT - 40 + k * 45L) - (born + 100 + (5 - k) * 18L + 200));
-                        b.animate().rotation(0f).scaleX(1f).scaleY(1f).setStartDelay(wait).setDuration(520)
-                                .setInterpolator(new OvershootInterpolator(1.4f));
-                    });
-        }
-        // Экран с Play прилетает из глубины прямо на сложенные лопасти и «прилипает»:
+        // Вихрь: знак рождается раскрытым, вихрь закручивается и сжимается к центру,
+        // а на удар раскручивается обратно и раскрывается на всю ширину.
+        ring.setRotation(-120f);
+        ring.animate().rotation(-300f).scaleX(0.5f).scaleY(0.5f).setStartDelay(born + 80).setDuration(300)
+                .setInterpolator(new AccelerateInterpolator(1.4f))
+                .withEndAction(() -> {
+                    if (closing) return;
+                    long wait = Math.max(0, (HIT - 40) - (born + 80 + 300));
+                    ring.animate().rotation(0f).scaleX(1f).scaleY(1f).setStartDelay(wait).setDuration(620)
+                            .setInterpolator(new OvershootInterpolator(1.4f));
+                });
+        // Экран с Play прилетает из глубины прямо на сжатый вихрь и «прилипает»:
         // сплющивается от удара и пружинит на место.
         screen.setScaleX(2.8f);
         screen.setScaleY(2.8f);
@@ -195,7 +179,7 @@ final class Splash {
                         .setInterpolator(new DecelerateInterpolator())
                         .withEndAction(() -> screen.animate().scaleX(1f).scaleY(1f).setStartDelay(0).setDuration(420)
                                 .setInterpolator(new OvershootInterpolator(3f))));
-        // Удар: плитка «вздыхает», вся сцена вздрагивает.
+        // Удар: знак «вздыхает», вся сцена вздрагивает.
         root.postDelayed(() -> {
             if (closing) return;
             logo.animate().scaleX(1.12f).scaleY(1.12f).setStartDelay(0).setDuration(110).setInterpolator(new DecelerateInterpolator())
@@ -216,7 +200,7 @@ final class Splash {
         line.setScaleX(0f);
         line.setAlpha(0f);
         line.animate().scaleX(1f).alpha(1f).setStartDelay(HIT + 900).setDuration(600).setInterpolator(new DecelerateInterpolator(2f));
-        // Два блика по плитке.
+        // Два блика по знаку.
         shine.setRotation(20f);
         shine.setTranslationX(-size * 0.6f);
         shine.animate().translationX(size * 1.3f).setStartDelay(HIT + 650).setDuration(650).setInterpolator(new AccelerateDecelerateInterpolator())
