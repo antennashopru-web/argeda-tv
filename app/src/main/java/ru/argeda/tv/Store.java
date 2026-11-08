@@ -67,6 +67,12 @@ final class Store {
     private int gen;
 
     private final Set<String> fav = new HashSet<>();
+    /** Избранное в порядке, который задал зритель (новые — в конец). */
+    final List<String> favOrder = new ArrayList<>();
+    /** Скрытые каналы и категории: в списках их нет, вернуть можно в настройках. */
+    final Set<String> hiddenCh = new HashSet<>(), hiddenGroups = new HashSet<>();
+    /** Настройки под PIN-кодом открыты до выхода из приложения. */
+    boolean settingsOpen;
     /** Избранные категории (группы плейлиста) в порядке добавления: их показывают наверху списка групп. */
     final List<String> favGroups = new ArrayList<>();
 
@@ -111,6 +117,14 @@ final class Store {
         }
         curId = p.getString("cur", "");
         fav.addAll(p.getStringSet("fav", new HashSet<>()));
+        try {
+            JSONArray a = new JSONArray(p.getString("favo", "[]"));
+            for (int i = 0; i < a.length(); i++) if (fav.contains(a.getString(i)) && !favOrder.contains(a.getString(i))) favOrder.add(a.getString(i));
+        } catch (JSONException ignored) {
+        }
+        for (String k : fav) if (!favOrder.contains(k)) favOrder.add(k);
+        hiddenCh.addAll(p.getStringSet("hidden", new HashSet<>()));
+        hiddenGroups.addAll(p.getStringSet("hiddenG", new HashSet<>()));
         try {
             JSONArray a = new JSONArray(p.getString("favg", "[]"));
             for (int i = 0; i < a.length(); i++) favGroups.add(a.getString(i));
@@ -168,7 +182,7 @@ final class Store {
     void removeSource(Source s) {
         sources.remove(s);
         delete(cacheFile(s));
-        delete(epgFile(s));
+        for (int i = 0; i < 5; i++) delete(epgFile(s, i));
         if (s.id.equals(curId)) curId = sources.isEmpty() ? "" : sources.get(0).id;
         saveSources();
         resetLoaded();
@@ -297,12 +311,28 @@ final class Store {
     // ---------- Телепрограмма ----------
 
     String epgUrl(Source s) {
-        if (s == null) return "";
+        List<String> l = epgUrls(s);
+        return l.isEmpty() ? "" : l.get(0);
+    }
+
+    /**
+     * Адреса телепрограммы: свои из настроек плейлиста или url-tvg (их может быть несколько через запятую,
+     * пробел или с новой строки). Программа берётся из первого адреса, где канал нашёлся.
+     */
+    List<String> epgUrls(Source s) {
+        List<String> r = new ArrayList<>();
+        if (s == null) return r;
         String u = !s.epg.trim().isEmpty() ? s.epg.trim() : headerEpg;
-        int comma = u.indexOf(',');
-        if (comma > 0) u = u.substring(0, comma);
-        u = u.trim();
-        return u.startsWith("http://") || u.startsWith("https://") ? u : DEFAULT_EPG;
+        for (String x : u.split("[,;\\s]+")) {
+            x = x.trim();
+            if ((x.startsWith("http://") || x.startsWith("https://")) && !r.contains(x) && r.size() < 5) r.add(x);
+        }
+        if (r.isEmpty()) r.add(DEFAULT_EPG);
+        return r;
+    }
+
+    File epgFile(Source s, int i) {
+        return i == 0 ? epgFile(s) : new File(app.getFilesDir(), "epg_" + s.id + "_" + i + ".xml");
     }
 
     boolean epgLoading() {
@@ -315,8 +345,8 @@ final class Store {
 
     void loadEpg(Source s, boolean force) {
         if (s == null || !s.id.equals(loadedId) || epgBusy) return;
-        String url = epgUrl(s);
-        if (url.isEmpty()) return;
+        final List<String> urls = epgUrls(s);
+        if (urls.isEmpty()) return;
         if (!force && epg != null && s.id.equals(epgId)) return;
         epgBusy = true;
         final Set<String> wanted = new HashSet<>();
@@ -327,25 +357,29 @@ final class Store {
         }
         final long past = Math.max(6 * 3600_000L, Math.min(days, 7) * 86_400_000L);
         epgBg.execute(() -> {
-            File f = epgFile(s);
             String err = "";
             Map<String, List<Epg.Prog>> m = null;
             final Map<String, String> icons = new HashMap<>();
-            try {
-                if (force || !f.exists() || System.currentTimeMillis() - f.lastModified() > EPG_TTL) {
-                    File tmp = new File(f.getPath() + ".part");
-                    try {
-                        Net.download(url, s.ua, tmp, 400L << 20);
-                        if (!tmp.renameTo(f)) throw new IOException("Не удалось сохранить телепрограмму");
-                    } catch (Exception e) {
-                        delete(tmp);
-                        if (!f.exists()) throw e;
-                        err = describe(e);
+            for (int i = 0; i < urls.size(); i++) {
+                File f = epgFile(s, i);
+                try {
+                    if (force || !f.exists() || System.currentTimeMillis() - f.lastModified() > EPG_TTL) {
+                        File tmp = new File(f.getPath() + ".part");
+                        try {
+                            Net.download(urls.get(i), s.ua, tmp, 400L << 20);
+                            if (!tmp.renameTo(f)) throw new IOException("Не удалось сохранить телепрограмму");
+                        } catch (Exception e) {
+                            delete(tmp);
+                            if (!f.exists()) throw e;
+                            err = describe(e);
+                        }
                     }
+                    Map<String, List<Epg.Prog>> one = Epg.parse(f, wanted, past, icons);
+                    if (m == null) m = one;
+                    else for (Map.Entry<String, List<Epg.Prog>> e : one.entrySet()) if (!m.containsKey(e.getKey())) m.put(e.getKey(), e.getValue());
+                } catch (Exception e) {
+                    err = describe(e);
                 }
-                m = Epg.parse(f, wanted, past, icons);
-            } catch (Exception e) {
-                err = describe(e);
             }
             final Map<String, List<Epg.Prog>> fm = m;
             final String fe = err;
@@ -367,10 +401,10 @@ final class Store {
 
     List<Channel> visible() {
         if (visibleCache == null) {
-            if (showAdult) visibleCache = all;
+            if (showAdult && hiddenCh.isEmpty() && hiddenGroups.isEmpty()) visibleCache = all;
             else {
                 List<Channel> v = new ArrayList<>(all.size());
-                for (Channel c : all) if (!c.adult) v.add(c);
+                for (Channel c : all) if ((showAdult || !c.adult) && !isHidden(c)) v.add(c);
                 visibleCache = v;
             }
         }
@@ -395,9 +429,120 @@ final class Store {
     boolean toggleFav(Channel c) {
         String k = c.key();
         boolean on = !fav.remove(k);
-        if (on) fav.add(k);
-        p.edit().putStringSet("fav", new HashSet<>(fav)).apply();
+        favOrder.remove(k);
+        if (on) {
+            fav.add(k);
+            favOrder.add(k);
+        }
+        saveFav();
         return on;
+    }
+
+    private void saveFav() {
+        p.edit().putStringSet("fav", new HashSet<>(fav)).putString("favo", new JSONArray(favOrder).toString()).apply();
+    }
+
+    /** Сдвигает канал в избранном (folder == null) или в папке на одно место; false — дальше некуда. */
+    boolean move(Folder f, Channel c, int dir) {
+        List<String> l = f == null ? favOrder : f.keys;
+        int i = l.indexOf(c.key()), j = i + dir;
+        if (i < 0 || j < 0 || j >= l.size()) return false;
+        l.set(i, l.get(j));
+        l.set(j, c.key());
+        if (f == null) saveFav();
+        else saveFolders();
+        return true;
+    }
+
+    // ---------- Скрытые каналы и категории ----------
+
+    boolean isHidden(Channel c) {
+        return hiddenCh.contains(c.key()) || hiddenGroups.contains(c.group);
+    }
+
+    void setHidden(Channel c, boolean on) {
+        if (on) hiddenCh.add(c.key());
+        else hiddenCh.remove(c.key());
+        visibleCache = null;
+        p.edit().putStringSet("hidden", new HashSet<>(hiddenCh)).apply();
+    }
+
+    void unhide(String key) {
+        hiddenCh.remove(key);
+        visibleCache = null;
+        p.edit().putStringSet("hidden", new HashSet<>(hiddenCh)).apply();
+    }
+
+    void setHiddenGroup(String g, boolean on) {
+        if (on) hiddenGroups.add(g);
+        else hiddenGroups.remove(g);
+        visibleCache = null;
+        p.edit().putStringSet("hiddenG", new HashSet<>(hiddenGroups)).apply();
+    }
+
+    /** Название канала по ключу (для списка скрытых); null — в текущем плейлисте его нет. */
+    Channel byKey(String k) {
+        for (Channel c : all) if (c.key().equals(k)) return c;
+        return null;
+    }
+
+    // ---------- PIN на настройки ----------
+
+    boolean settingsPin() {
+        return p.getBoolean("setpin", false);
+    }
+
+    void setSettingsPin(boolean b) {
+        p.edit().putBoolean("setpin", b).apply();
+    }
+
+    // ---------- Резервная копия ----------
+
+    /** Что не копируется: служебные отметки и то, что зависит от устройства. */
+    private static final Set<String> NOT_BACKED = new HashSet<>(java.util.Arrays.asList("bw", "updAt"));
+
+    String exportJson() throws JSONException {
+        org.json.JSONObject o = new org.json.JSONObject();
+        o.put("argeda", 1);
+        org.json.JSONObject v = new org.json.JSONObject();
+        for (Map.Entry<String, ?> e : p.getAll().entrySet()) {
+            Object x = e.getValue();
+            if (NOT_BACKED.contains(e.getKey()) || x == null) continue;
+            if (x instanceof Set) {
+                JSONArray a = new JSONArray();
+                for (Object s : (Set<?>) x) a.put(s);
+                v.put(e.getKey(), new org.json.JSONObject().put("set", a));
+            } else v.put(e.getKey(), x);
+        }
+        o.put("prefs", v);
+        return o.toString(1);
+    }
+
+    /** Заменяет настройки копией. Нужен перезапуск экрана: всё перечитывается заново. */
+    void importJson(String text) throws JSONException {
+        org.json.JSONObject o = new org.json.JSONObject(text);
+        if (o.optInt("argeda") != 1) throw new JSONException("Это не копия настроек ARGEDA TV");
+        org.json.JSONObject v = o.getJSONObject("prefs");
+        SharedPreferences.Editor ed = p.edit().clear();
+        java.util.Iterator<String> it = v.keys();
+        while (it.hasNext()) {
+            String k = it.next();
+            Object x = v.get(k);
+            if (x instanceof org.json.JSONObject && ((org.json.JSONObject) x).has("set")) {
+                JSONArray a = ((org.json.JSONObject) x).getJSONArray("set");
+                Set<String> s = new HashSet<>();
+                for (int i = 0; i < a.length(); i++) s.add(a.getString(i));
+                ed.putStringSet(k, s);
+            } else if (x instanceof Boolean) ed.putBoolean(k, (Boolean) x);
+            else if (x instanceof Integer) ed.putInt(k, (Integer) x);
+            else if (x instanceof Long) ed.putLong(k, (Long) x);
+            else if (x instanceof Double) ed.putFloat(k, ((Double) x).floatValue());
+            else ed.putString(k, String.valueOf(x));
+        }
+        ed.commit();
+        synchronized (Store.class) {
+            inst = null; // при следующем Store.get всё прочитается из восстановленных настроек
+        }
     }
 
     boolean isFavGroup(String g) {

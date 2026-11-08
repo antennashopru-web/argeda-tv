@@ -134,6 +134,11 @@ final class Playback {
         if (bw > 100_000) app.getSharedPreferences("argeda", Context.MODE_PRIVATE).edit().putLong(PREF_BW, bw).apply();
     }
 
+    /** Оценка скорости интернета, бит/с (0 — ещё не известна). */
+    long bandwidth() {
+        return meter == null ? 0 : meter.getBitrateEstimate();
+    }
+
     boolean isArchive() {
         return archStart > 0;
     }

@@ -121,6 +121,21 @@
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
                     android:drawableStart="@drawable/ic_audio" android:drawablePadding="8dp"
                     android:text="Звук" android:textColor="@color/text" android:visibility="gone" />
+                <TextView android:id="@+id/bQuality" android:layout_width="wrap_content" android:layout_height="40dp"
+                    android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
+                    android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
+                    android:drawableStart="@drawable/ic_hd" android:drawablePadding="8dp"
+                    android:text="Качество" android:textColor="@color/text" android:visibility="gone" />
+                <TextView android:id="@+id/bSubs" android:layout_width="wrap_content" android:layout_height="40dp"
+                    android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
+                    android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
+                    android:drawableStart="@drawable/ic_cc" android:drawablePadding="8dp"
+                    android:text="Субтитры" android:textColor="@color/text" android:visibility="gone" />
+                <TextView android:id="@+id/bStats" android:layout_width="wrap_content" android:layout_height="40dp"
+                    android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
+                    android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
+                    android:drawableStart="@drawable/ic_info" android:drawablePadding="8dp"
+                    android:text="Сведения" android:textColor="@color/text" />
             </LinearLayout>
         </HorizontalScrollView>
     </LinearLayout>
