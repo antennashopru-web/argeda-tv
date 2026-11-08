@@ -49,6 +49,8 @@ final class Splash {
     /** Момент удара в звуке, мс (совпадает с HIT в tools/sound/mix.py). */
     static final long HIT = 1300;
     private static final long HOLD = 4100, WARP = 550, SKIP = 250;
+    /** Момент раскрытия лопастей в ролике splash_anim.webp, мс: сюда приходится удар звука. */
+    private static final long VIDEO_HIT = 3600;
     private static final int[] SPARK = {0xFFE30613, 0xFF0047BB, 0xFFF28C00, 0xFFA855F7, 0xFFC4B5FD, Color.WHITE};
 
     private final Activity a;
@@ -85,6 +87,7 @@ final class Splash {
         root.setClickable(true);
         root.setOnClickListener(v -> skip());
         root.setFocusable(false); // касание пропускает заставку, но фокус пульта остаётся на списке
+        if (android.os.Build.VERSION.SDK_INT >= 28 && buildVideo()) return;
 
         int size = dp(150);
         fx = new Fx(a, size);
@@ -234,6 +237,42 @@ final class Splash {
         root.postDelayed(auto, HOLD);
     }
 
+    /**
+     * Ролик заставки (Kling, res/raw/splash_anim.webp): вертушка крутится, лопасти складываются, Play
+     * прилетает и прилипает, лопасти раскрываются. Анимированный WebP рисуется обычным ImageView,
+     * без SurfaceView/TextureView, которые на приставке ARTAK ломают экран. Звук сдвинут так, чтобы удар
+     * совпал с раскрытием лопастей в ролике; последний кадр держится до конца голоса.
+     *
+     * @return false, если ролик не открылся (тогда рисуется прежняя анимация)
+     */
+    @android.annotation.TargetApi(28)
+    private boolean buildVideo() {
+        android.graphics.drawable.Drawable d;
+        try {
+            d = android.graphics.ImageDecoder.decodeDrawable(
+                    android.graphics.ImageDecoder.createSource(a.getResources(), R.raw.splash_anim));
+        } catch (Exception e) {
+            return false;
+        }
+        if (!(d instanceof android.graphics.drawable.AnimatedImageDrawable)) return false;
+        android.graphics.drawable.AnimatedImageDrawable anim = (android.graphics.drawable.AnimatedImageDrawable) d;
+        anim.setRepeatCount(0);
+        root.setBackgroundColor(Color.WHITE);
+        col = new LinearLayout(a);
+        ImageView v = new ImageView(a);
+        v.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        v.setImageDrawable(anim);
+        col.addView(v, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(col, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        a.addContentView(root, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        anim.start();
+        root.postDelayed(() -> {
+            if (!closing) speak();
+        }, VIDEO_HIT - HIT);
+        root.postDelayed(auto, VIDEO_HIT - HIT + HOLD);
+        return true;
+    }
+
     /** Короткая затухающая встряска. */
     private static void shake(View v, float amp) {
         ValueAnimator s = ValueAnimator.ofFloat(0f, 1f);
@@ -313,7 +352,7 @@ final class Splash {
         root.removeCallbacks(auto);
         root.setClickable(false);
         if (warp) {
-            fx.warp = true;
+            if (fx != null) fx.warp = true;
             col.animate().cancel();
             col.animate().scaleX(5f).scaleY(5f).alpha(0f).setStartDelay(0).setDuration(WARP)
                     .setInterpolator(new AccelerateInterpolator(2f));
