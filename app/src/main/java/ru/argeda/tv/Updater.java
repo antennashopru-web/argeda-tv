@@ -123,7 +123,7 @@ final class Updater {
                 } else if (fUrl == null || fCode <= have) {
                     if (tell) Ui.toast(t, "Установлена последняя версия " + versionName(app));
                 } else if (gone) {
-                    Ui.toast(app, "Доступна новая версия " + fTag.replaceFirst("^v", "") + ". Меню → «Проверить обновления»");
+                    Ui.toast(app, "Доступна новая версия " + fTag.replaceFirst("^v", "") + ". Настройки → «Проверить обновления»");
                 } else {
                     offer(a, fSrc, fSize, fTag, fNotes);
                 }

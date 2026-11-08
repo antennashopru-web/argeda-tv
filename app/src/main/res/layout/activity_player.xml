@@ -85,30 +85,37 @@
                 <TextView android:id="@+id/bLive" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginEnd="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
-                    android:text="●  В прямой эфир" android:textColor="@color/text" android:visibility="gone" />
+                    android:drawableStart="@drawable/ic_live" android:drawablePadding="8dp"
+                    android:text="В прямой эфир" android:textColor="@color/text" android:visibility="gone" />
                 <TextView android:id="@+id/bList" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:background="@drawable/btn_bg" android:focusable="true" android:clickable="true" android:gravity="center"
-                    android:paddingStart="18dp" android:paddingEnd="18dp" android:text="☰  Каналы" android:textColor="@color/text" />
+                    android:paddingStart="18dp" android:paddingEnd="18dp" android:drawableStart="@drawable/ic_list" android:drawablePadding="8dp"
+                    android:text="Каналы" android:textColor="@color/text" />
                 <TextView android:id="@+id/bEpg" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
-                    android:text="▤  Телепрограмма" android:textColor="@color/text" />
+                    android:drawableStart="@drawable/ic_epg" android:drawablePadding="8dp"
+                    android:text="Телепрограмма" android:textColor="@color/text" />
                 <TextView android:id="@+id/bFav" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
-                    android:text="☆  В избранное" android:textColor="@color/text" />
+                    android:drawableStart="@drawable/ic_star_outline" android:drawablePadding="8dp"
+                    android:text="В избранное" android:textColor="@color/text" />
                 <TextView android:id="@+id/bFit" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
-                    android:text="⛶  Формат" android:textColor="@color/text" />
+                    android:drawableStart="@drawable/ic_fit" android:drawablePadding="8dp"
+                    android:text="Формат" android:textColor="@color/text" />
                 <TextView android:id="@+id/bRot" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
+                    android:drawableStart="@drawable/ic_rotate" android:drawablePadding="8dp"
                     android:textColor="@color/text" android:visibility="gone" />
                 <TextView android:id="@+id/bAudio" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
-                    android:text="♪  Звук" android:textColor="@color/text" android:visibility="gone" />
+                    android:drawableStart="@drawable/ic_audio" android:drawablePadding="8dp"
+                    android:text="Звук" android:textColor="@color/text" android:visibility="gone" />
             </LinearLayout>
         </HorizontalScrollView>
     </LinearLayout>

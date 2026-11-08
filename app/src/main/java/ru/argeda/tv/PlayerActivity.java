@@ -207,7 +207,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         bFav.setOnClickListener(v -> {
             Channel c = list.get(index);
             boolean on = st.toggleFav(c);
-            bFav.setText(on ? "★  В избранном" : "☆  В избранное");
+            favButton(on);
             Ui.toast(this, on ? "Добавлено в избранное" : "Убрано из избранного");
         });
         findViewById(R.id.bFit).setOnClickListener(v -> {
@@ -222,11 +222,11 @@ public class PlayerActivity extends Activity implements Playback.Listener {
             // Телефон и планшет: экран поворачивается за устройством, либо закреплён кнопкой «Поворот».
             rot = getSharedPreferences("argeda", MODE_PRIVATE).getInt("rot", 0);
             bRot.setVisibility(View.VISIBLE);
-            bRot.setText("⟳  Поворот: " + ROT_NAMES[rot]);
+            bRot.setText("Поворот: " + ROT_NAMES[rot]);
             bRot.setOnClickListener(v -> {
                 rot = (rot + 1) % ROT_NAMES.length;
                 getSharedPreferences("argeda", MODE_PRIVATE).edit().putInt("rot", rot).apply();
-                bRot.setText("⟳  Поворот: " + ROT_NAMES[rot]);
+                bRot.setText("Поворот: " + ROT_NAMES[rot]);
                 applyRotation();
             });
         }
@@ -466,12 +466,17 @@ public class PlayerActivity extends Activity implements Playback.Listener {
 
     // ---------- Панели ----------
 
+    private void favButton(boolean on) {
+        bFav.setText(on ? "В избранном" : "В избранное");
+        bFav.setCompoundDrawablesRelativeWithIntrinsicBounds(on ? R.drawable.ic_star : R.drawable.ic_star_outline, 0, 0, 0);
+    }
+
     private void showInfo(boolean focus) {
         Channel c = list.get(index);
         infoNum.setText(String.valueOf(c.num));
         infoName.setText(c.name);
         infoGroup.setText(c.groupTitle());
-        bFav.setText(st.isFav(c) ? "★  В избранном" : "☆  В избранное");
+        favButton(st.isFav(c));
         fillTime();
         info.setVisibility(View.VISIBLE);
         if (focus) {

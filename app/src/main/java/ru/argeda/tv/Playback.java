@@ -330,7 +330,7 @@ final class Playback {
     private static String describe(PlaybackException e) {
         int http = httpCode(e);
         if (http == 401 || http == 403) return "Доступ к каналу закрыт (код " + http + ").\nПроверьте подписку у провайдера.";
-        if (http == 404) return "Канал не найден на сервере (код 404).\nВозможно, плейлист устарел — обновите его в меню.";
+        if (http == 404) return "Канал не найден на сервере (код 404).\nВозможно, плейлист устарел — обновите его в настройках.";
         if (http > 0) return "Сервер канала ответил ошибкой " + http + ".";
         switch (e.errorCode) {
             case PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED:
