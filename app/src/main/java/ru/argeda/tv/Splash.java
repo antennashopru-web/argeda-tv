@@ -34,7 +34,7 @@ import java.util.Random;
  * Заставка при запуске под звук res/raw/argeda_tv.mp3 (мощный удар + басовый голос «ARGEDA TV»).
  *
  * <p>Сцены (мс): 0–{@link #HIT} — «зарядка»: искры по спирали стягиваются в светящееся ядро, из него
- * появляется плитка знака: экран с Play, под ним сложенные лопасти. {@link #HIT} — удар: лопасти раскрываются веером, вспышка, встряска,
+ * появляется плитка знака, лопасти складываются, экран с Play прилетает и «прилипает». {@link #HIT} — удар: лопасти раскрываются веером, вспышка, встряска,
  * ударные кольца, взрыв искр, лучи. Затем надпись по буквам и голос, блик, вокруг знака кружат огоньки.
  * {@link #HOLD} — финал: пролёт сквозь знак (он стремительно растёт и растворяется).
  *
@@ -168,26 +168,33 @@ final class Splash {
         logo.setRotation(-45f);
         logo.animate().scaleX(1f).scaleY(1f).rotation(0f).setStartDelay(born).setDuration(520)
                 .setInterpolator(new OvershootInterpolator(1.5f));
-        // Лопасти сначала сложены веером под экраном (все в одном месте и уменьшены),
-        // знак слегка доворачивается, а на удар лопасти раскрываются одна за другой.
+        // Лопасти: плитка рождается с раскрытыми лопастями, они складываются веером в центр
+        // (все в одно место и уменьшаются), а на удар снова раскрываются одна за другой.
         blades.setRotation(-120f);
         blades.animate().rotation(0f).setStartDelay(born).setDuration(420 + 260).setInterpolator(new DecelerateInterpolator(1.6f));
         for (int i = 0; i < blade.length; i++) {
             ImageView b = blade[i];
-            b.setRotation(-60f * i);
-            b.setScaleX(0.45f);
-            b.setScaleY(0.45f);
-            b.animate().rotation(0f).scaleX(1f).scaleY(1f).setStartDelay(HIT - 40 + i * 45L).setDuration(520)
-                    .setInterpolator(new OvershootInterpolator(1.4f));
+            final long k = i;
+            b.animate().rotation(-60f * i).scaleX(0.45f).scaleY(0.45f).setStartDelay(born + 100 + (5 - k) * 18L).setDuration(200)
+                    .setInterpolator(new AccelerateInterpolator(1.4f))
+                    .withEndAction(() -> {
+                        if (closing) return;
+                        long wait = Math.max(0, (HIT - 40 + k * 45L) - (born + 100 + (5 - k) * 18L + 200));
+                        b.animate().rotation(0f).scaleX(1f).scaleY(1f).setStartDelay(wait).setDuration(520)
+                                .setInterpolator(new OvershootInterpolator(1.4f));
+                    });
         }
-        // Экран с Play появляется вместе с плиткой и прикрывает сложенные лопасти, на удар — толчок.
-        screen.setScaleX(0f);
-        screen.setScaleY(0f);
-        screen.animate().scaleX(1f).scaleY(1f).setStartDelay(born + 80).setDuration(380).setInterpolator(new OvershootInterpolator(2f))
-                .withEndAction(() -> screen.animate().scaleX(1.18f).scaleY(1.18f).setStartDelay(Math.max(0, HIT - 30 - born - 460)).setDuration(120)
+        // Экран с Play прилетает из глубины прямо на сложенные лопасти и «прилипает»:
+        // сплющивается от удара и пружинит на место.
+        screen.setScaleX(2.8f);
+        screen.setScaleY(2.8f);
+        screen.setAlpha(0f);
+        screen.animate().scaleX(1f).scaleY(1f).alpha(1f).setStartDelay(HIT - 220).setDuration(200)
+                .setInterpolator(new AccelerateInterpolator(1.8f))
+                .withEndAction(() -> screen.animate().scaleX(1.25f).scaleY(0.8f).setStartDelay(0).setDuration(90)
                         .setInterpolator(new DecelerateInterpolator())
-                        .withEndAction(() -> screen.animate().scaleX(1f).scaleY(1f).setStartDelay(0).setDuration(380)
-                                .setInterpolator(new OvershootInterpolator(2.6f))));
+                        .withEndAction(() -> screen.animate().scaleX(1f).scaleY(1f).setStartDelay(0).setDuration(420)
+                                .setInterpolator(new OvershootInterpolator(3f))));
         // Удар: плитка «вздыхает», вся сцена вздрагивает.
         root.postDelayed(() -> {
             if (closing) return;
