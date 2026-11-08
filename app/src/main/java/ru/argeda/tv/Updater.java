@@ -45,7 +45,7 @@ final class Updater {
     private static final ExecutorService bg = Executors.newSingleThreadExecutor();
     private static final Handler ui = new Handler(Looper.getMainLooper());
 
-    private static boolean running, offered;
+    private static boolean running, offered, report;
     /** Скачанный файл ждёт, пока пользователь разрешит установку из этого приложения. */
     private static File pending;
 
@@ -62,7 +62,14 @@ final class Updater {
 
     /** manual — из меню: проверяем сразу и сообщаем, если обновлений нет. */
     static void check(Activity a, boolean manual) {
-        if (running) return;
+        if (running) {
+            // Фоновая проверка уже идёт: сообщим её результат, как будто проверку запустили из меню.
+            if (manual) {
+                report = true;
+                Ui.toast(a, "Проверяю обновления…");
+            }
+            return;
+        }
         SharedPreferences p = a.getSharedPreferences("argeda", Context.MODE_PRIVATE);
         long now = System.currentTimeMillis();
         if (!manual && (offered || now - p.getLong("updAt", 0) < EVERY)) return;
@@ -100,11 +107,13 @@ final class Updater {
             final long fSize = size;
             ui.post(() -> {
                 running = false;
+                boolean tell = manual || report;
+                report = false;
                 if (a.isFinishing()) return;
                 if (fErr != null) {
-                    if (manual) Ui.toast(a, fErr);
+                    if (tell) Ui.toast(a, fErr);
                 } else if (fUrl == null || fCode <= have) {
-                    if (manual) Ui.toast(a, "Установлена последняя версия");
+                    if (tell) Ui.toast(a, "Установлена последняя версия");
                 } else {
                     offer(a, fSrc, fSize, fTag, fNotes);
                 }
