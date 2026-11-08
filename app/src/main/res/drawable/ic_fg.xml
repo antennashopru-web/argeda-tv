@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Передний слой значка: 3D-модель из Blender (argeda-player/blender/model.py) -->
+<!-- Передний слой значка: круглый знак из шапки (картинка 2, вариант 8), выбран ARTAK -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
     android:src="@drawable/ic_fg_art"
     android:filter="true"
