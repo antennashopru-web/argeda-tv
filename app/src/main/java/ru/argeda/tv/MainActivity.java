@@ -45,7 +45,7 @@ import java.util.Map;
  */
 @OptIn(markerClass = UnstableApi.class)
 public class MainActivity extends Activity implements Store.Listener, Playback.Listener {
-    private static final String G_ALL = "\u0001all", G_FAV = "\u0001fav", G_REC = "\u0001rec";
+    private static final String G_ALL = "\u0001all", G_FAV = "\u0001fav", G_REC = "\u0001rec", G_FOLDER = "\u0001f:";
 
     private static final class Group {
         final String id, title;
@@ -464,6 +464,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         }
         groups.clear();
         if (favN > 0) groups.add(new Group(G_FAV, "★  Избранное", favN));
+        // Свои папки избранного — сразу под ним. Пустую папку тоже видно, чтобы было куда складывать.
+        for (Store.Folder f : st.folders) groups.add(new Group(G_FOLDER + f.name, "☆  " + f.name, folderChannels(f, vis).size()));
         // Избранные категории — сразу под «Избранным», в том порядке, в каком их добавляли.
         for (String g : st.favGroups) {
             Integer n = m.get(g);
@@ -512,9 +514,26 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     private List<Channel> channelsFor(String g, List<Channel> vis) {
         if (G_ALL.equals(g)) return vis;
         if (G_REC.equals(g)) return recentOf(vis);
+        if (g.startsWith(G_FOLDER)) {
+            Store.Folder f = st.folder(g.substring(G_FOLDER.length()));
+            return f == null ? new ArrayList<>() : folderChannels(f, vis);
+        }
         List<Channel> r = new ArrayList<>();
         boolean f = G_FAV.equals(g);
         for (Channel c : vis) if (f ? st.isFav(c) : g.equals(c.group)) r.add(c);
+        return r;
+    }
+
+    /** Каналы папки в том порядке, в каком их туда добавляли. */
+    private List<Channel> folderChannels(Store.Folder f, List<Channel> vis) {
+        List<Channel> r = new ArrayList<>();
+        if (f.keys.isEmpty()) return r;
+        Map<String, Channel> m = new HashMap<>();
+        for (Channel c : vis) if (!m.containsKey(c.key())) m.put(c.key(), c);
+        for (String k : f.keys) {
+            Channel c = m.get(k);
+            if (c != null) r.add(c);
+        }
         return r;
     }
 
@@ -549,6 +568,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         if (G_ALL.equals(id)) return "Все каналы";
         if (G_FAV.equals(id)) return "Избранное";
         if (G_REC.equals(id)) return "Недавние";
+        if (id.startsWith(G_FOLDER)) return id.substring(G_FOLDER.length());
         return Channel.groupTitle(id);
     }
 
@@ -763,20 +783,101 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         }
     }
 
+    /**
+     * Долгое нажатие на канал: окно «В избранное» — общее избранное, свои папки и «Новая папка».
+     * Пункт с галочкой убирает канал оттуда, без галочки — добавляет.
+     */
     private void toggleFav(int pos) {
         List<Channel> l = ca.items();
         if (pos < 0 || pos >= l.size()) return;
         Channel c = l.get(pos);
-        boolean on = st.toggleFav(c);
-        Ui.toast(this, on ? "«" + c.name + "» добавлен в избранное" : "«" + c.name + "» убран из избранного");
-        boolean favList = G_FAV.equals(curGroup) && search.length() == 0;
+        List<String> labels = new ArrayList<>();
+        labels.add((st.isFav(c) ? "✓  " : "      ") + "★  Избранное");
+        for (Store.Folder f : st.folders) labels.add((st.inFolder(f, c) ? "✓  " : "      ") + "☆  " + f.name);
+        labels.add("      ＋  Новая папка…");
+        new AlertDialog.Builder(this).setTitle(c.name).setItems(labels.toArray(new String[0]), (d, w) -> {
+            if (w == 0) {
+                boolean on = st.toggleFav(c);
+                Ui.toast(this, on ? "«" + c.name + "» добавлен в избранное" : "«" + c.name + "» убран из избранного");
+                favChanged(c);
+            } else if (w <= st.folders.size()) {
+                Store.Folder f = st.folders.get(w - 1);
+                boolean on = st.toggleInFolder(f, c);
+                Ui.toast(this, on ? "«" + c.name + "» добавлен в папку «" + f.name + "»" : "«" + c.name + "» убран из папки «" + f.name + "»");
+                favChanged(c);
+            } else {
+                askText("Новая папка", "", name -> {
+                    Store.Folder f = st.addFolder(name);
+                    if (f == null) {
+                        Ui.toast(this, name.trim().isEmpty() ? "Введите название папки" : "Папка «" + name.trim() + "» уже есть");
+                        return;
+                    }
+                    st.toggleInFolder(f, c);
+                    Ui.toast(this, "Папка «" + f.name + "» создана, «" + c.name + "» добавлен в неё");
+                    favChanged(c);
+                });
+            }
+        }).show();
+    }
+
+    /** После изменения избранного или папок: пересчитать группы и обновить список, если он сейчас о них. */
+    private void favChanged(Channel c) {
+        boolean favList = search.length() == 0 && (G_FAV.equals(curGroup) || curGroup.startsWith(G_FOLDER));
         buildGroups();
         if (favList) applyFilter();
-        else ca.notifyItemChanged(pos, "t");
+        else {
+            int i = ca.items().indexOf(c);
+            if (i >= 0) ca.notifyItemChanged(i, "t");
+        }
+    }
+
+    /** Долгое нажатие на свою папку: переименовать или удалить. */
+    private void manageFolder(String id) {
+        Store.Folder f = st.folder(id.substring(G_FOLDER.length()));
+        if (f == null) return;
+        new AlertDialog.Builder(this).setTitle("Папка «" + f.name + "»").setItems(new String[]{"Переименовать", "Удалить папку"}, (d, w) -> {
+            if (w == 0) {
+                askText("Новое название", f.name, name -> {
+                    if (!st.renameFolder(f, name)) {
+                        Ui.toast(this, name.trim().isEmpty() ? "Введите название папки" : "Папка «" + name.trim() + "» уже есть");
+                        return;
+                    }
+                    boolean cur = curGroup.equals(id);
+                    if (cur) curGroup = G_FOLDER + f.name;
+                    buildGroups();
+                    if (cur) applyFilter();
+                    focusGroupId(G_FOLDER + f.name);
+                });
+            } else {
+                new AlertDialog.Builder(this).setTitle("Удалить папку «" + f.name + "»?")
+                        .setMessage("Каналы останутся в плейлисте, удалится только папка.")
+                        .setPositiveButton("Удалить", (x, y) -> {
+                            st.removeFolder(f);
+                            Ui.toast(this, "Папка «" + f.name + "» удалена");
+                            buildGroups();
+                            applyFilter();
+                            focusGroupId(curGroup);
+                        })
+                        .setNegativeButton("Отмена", null).show();
+            }
+        }).show();
+    }
+
+    private void focusGroupId(String id) {
+        if (narrow) return;
+        int i = indexOfGroup(id);
+        if (i >= 0) {
+            groupsView.scrollToPosition(i);
+            focusAt(groupsView, i, 10);
+        }
     }
 
     /** Долгое нажатие на категорию: добавить её в избранное (наверх списка) или убрать оттуда. */
     private void toggleFavGroup(String id) {
+        if (id.startsWith(G_FOLDER)) {
+            manageFolder(id);
+            return;
+        }
         if (id.startsWith("\u0001")) {
             Ui.toast(this, "В избранное можно добавить категорию из плейлиста");
             return;
@@ -785,13 +886,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         String t = Channel.groupTitle(id);
         Ui.toast(this, on ? "Категория «" + t + "» добавлена в избранное" : "Категория «" + t + "» убрана из избранного");
         buildGroups();
-        if (!narrow) {
-            int i = indexOfGroup(id);
-            if (i >= 0) {
-                groupsView.scrollToPosition(i);
-                focusAt(groupsView, i, 10);
-            }
-        }
+        focusGroupId(id);
     }
 
     private void addSource() {
@@ -845,6 +940,11 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         d.getListView().setOnItemLongClickListener((parent, v, w, id) -> {
             if (w < 0 || w >= groups.size()) return false;
             String gid = groups.get(w).id;
+            if (gid.startsWith(G_FOLDER)) {
+                d.dismiss();
+                manageFolder(gid);
+                return true;
+            }
             if (gid.startsWith("\u0001")) return false;
             d.dismiss();
             toggleFavGroup(gid);
@@ -962,6 +1062,29 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         void got(String pin);
     }
 
+    private void askText(String title, String value, PinCallback cb) {
+        EditText e = new EditText(this);
+        e.setSingleLine(true);
+        e.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        e.setFilters(new InputFilter[]{new InputFilter.LengthFilter(40)});
+        e.setText(value);
+        e.setSelection(value.length());
+        FrameLayout f = new FrameLayout(this);
+        int pad = Ui.dp(this, 24);
+        f.setPadding(pad, Ui.dp(this, 8), pad, 0);
+        f.addView(e);
+        AlertDialog d = new AlertDialog.Builder(this).setTitle(title).setView(f)
+                .setPositiveButton("OK", (x, w) -> cb.got(e.getText().toString()))
+                .setNegativeButton("Отмена", null).create();
+        e.setOnEditorActionListener((v, a, ev) -> {
+            d.getButton(DialogInterface.BUTTON_POSITIVE).performClick();
+            return true;
+        });
+        if (d.getWindow() != null) d.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_VISIBLE);
+        d.show();
+        e.requestFocus();
+    }
+
     private void askPin(String title, PinCallback cb) {
         EditText e = new EditText(this);
         e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_VARIATION_PASSWORD);
@@ -994,8 +1117,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
                 "Проигрыватель IPTV для приставок и телефонов. Своих каналов в приложении нет: "
                         + "оно показывает плейлист вашего провайдера (ссылка M3U, Xtream Codes или файл).\n\n"
                         + "Пульт в списке:\n▲ ▼ — выбор канала (он включается в окне справа)\nOK — на весь экран\n"
-                        + "▶ — телепрограмма и записи, ◀ — группы\nДолгое нажатие OK на канале — избранное\n"
-                        + "Долгое нажатие OK на категории — категория в избранном (наверху списка)\n\n"
+                        + "▶ — телепрограмма и записи, ◀ — группы\nДолгое нажатие OK на канале — избранное и свои папки\n"
+                        + "Долгое нажатие OK на категории — категория в избранном (наверху списка), на своей папке — переименовать или удалить\n\n"
                         + "Пульт на весь экран:\n▲ ▼ — каналы, OK или ◀ — список, ▶ — сведения и кнопки, цифры — номер канала\n"
                         + "В записи: ◀ ▶ — перемотка, «Назад» — вернуться в эфир\n\n"
                         + "Телефон: касание канала — в окне, второе касание — на весь экран. "
