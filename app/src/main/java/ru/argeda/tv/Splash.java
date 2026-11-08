@@ -165,8 +165,9 @@ final class Splash {
                 .withEndAction(() -> {
                     if (closing) return;
                     long wait = Math.max(0, (HIT - 40) - (born + 80 + 300));
+                    // Без перелёта по углу: иначе из-под экрана выглянули бы углы белой подложки.
                     ring.animate().rotation(0f).scaleX(1f).scaleY(1f).setStartDelay(wait).setDuration(620)
-                            .setInterpolator(new OvershootInterpolator(1.4f));
+                            .setInterpolator(new DecelerateInterpolator(2.2f));
                 });
         // Экран с Play прилетает из глубины прямо на сжатый вихрь и «прилипает»:
         // сплющивается от удара и пружинит на место.
