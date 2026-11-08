@@ -55,12 +55,14 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     private List<Channel> list;
     private int index, fit, eatUp = -1;
     private boolean tv;
+    /** Фокус на кнопках панели сведений (◀ ▶ OK — по кнопкам). Иначе пульт управляет каналами и перемоткой. */
+    private boolean btns;
     private String digitBuf = "";
     private long seekBase, seekDelta;
     private final Handler ui = new Handler(Looper.getMainLooper());
     private final SimpleDateFormat hm = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
-    private final Runnable hideInfoRun = () -> info.setVisibility(View.GONE);
+    private final Runnable hideInfoRun = this::hideInfo;
     private final Runnable hideSideRun = this::hideSide;
     private final Runnable hideEpgRun = this::hideEpg;
     private final Runnable zapRun = () -> {
@@ -230,9 +232,15 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         }
         applyRotation();
         fitPanels();
-        side.setClickable(true);
-        info.setClickable(true);
-        epgSide.setClickable(true);
+        // Панели кликабельны только чтобы касание не проходило к видео; фокус пульта им не нужен
+        // (иначе после появления панели OK попадал в пустую панель и ничего не делал).
+        for (View v : new View[]{side, info, epgSide}) {
+            v.setClickable(true);
+            v.setFocusable(false);
+        }
+        // Корень держит фокус, когда панели скрыты, чтобы он не оставался на невидимой кнопке.
+        root.setFocusable(true);
+        if (android.os.Build.VERSION.SDK_INT >= 26) root.setDefaultFocusHighlightEnabled(false);
         setupGestures();
     }
 
@@ -333,6 +341,8 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         infoArch.setVisibility(arch ? View.VISIBLE : View.GONE);
         bLive.setVisibility(arch ? View.VISIBLE : View.GONE);
         bAudio.setVisibility(audioTracks().size() > 1 ? View.VISIBLE : View.GONE);
+        // «В прямой эфир» исчезла под фокусом — переводим его на соседнюю кнопку, а не в пустоту.
+        if (btns && info.getVisibility() == View.VISIBLE && !info.hasFocus()) bList.requestFocus();
         if (info.getVisibility() == View.VISIBLE) fillTime();
         if (epgSide.getVisibility() == View.VISIBLE) {
             long ps = arch ? pb.archStart : 0;
@@ -464,9 +474,23 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         bFav.setText(st.isFav(c) ? "★  В избранном" : "☆  В избранное");
         fillTime();
         info.setVisibility(View.VISIBLE);
-        if (focus) (pb.isArchive() ? bLive : bList).requestFocus();
+        if (focus) {
+            btns = true;
+            (pb.isArchive() ? bLive : bList).requestFocus();
+        } else if (!btns) parkFocus();
         ui.removeCallbacks(hideInfoRun);
-        ui.postDelayed(hideInfoRun, focus || !tv ? 8000 : 5000);
+        ui.postDelayed(hideInfoRun, btns || !tv ? 8000 : 5000);
+    }
+
+    private void hideInfo() {
+        info.setVisibility(View.GONE);
+        btns = false;
+        parkFocus();
+    }
+
+    /** Убирает фокус с кнопок и списков: дальше пульт обрабатывает handleKey. */
+    private void parkFocus() {
+        if (tv || !root.isInTouchMode()) root.requestFocus();
     }
 
     private void fillTime() {
@@ -503,6 +527,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
 
     private void showSide() {
         info.setVisibility(View.GONE);
+        btns = false;
         hideEpg();
         sideTitle.setText(st.playTitle + "  ·  " + list.size());
         sa.current = list.get(index);
@@ -515,12 +540,15 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     }
 
     private void hideSide() {
+        boolean had = side.hasFocus();
         side.setVisibility(View.GONE);
         ui.removeCallbacks(hideSideRun);
+        if (had) parkFocus();
     }
 
     private void showEpg() {
         info.setVisibility(View.GONE);
+        btns = false;
         hideSide();
         Channel c = list.get(index);
         epgTitle.setText("Телепрограмма  ·  " + c.name);
@@ -547,8 +575,10 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     }
 
     private void hideEpg() {
+        boolean had = epgSide.hasFocus();
         epgSide.setVisibility(View.GONE);
         ui.removeCallbacks(hideEpgRun);
+        if (had) parkFocus();
     }
 
     /** Строка телепрограммы на полном экране: запись — с начала передачи, текущая — с начала или в эфир. */
@@ -643,9 +673,10 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     private boolean handleKey(int k, int repeat) {
         boolean sideOn = side.getVisibility() == View.VISIBLE, infoOn = info.getVisibility() == View.VISIBLE,
                 epgOn = epgSide.getVisibility() == View.VISIBLE, arch = pb.isArchive();
+        if (!infoOn) btns = false;
         if (infoOn) {
             ui.removeCallbacks(hideInfoRun);
-            ui.postDelayed(hideInfoRun, info.hasFocus() ? 8000 : 5000);
+            ui.postDelayed(hideInfoRun, btns ? 8000 : 5000);
         }
         if (sideOn) {
             ui.removeCallbacks(hideSideRun);
@@ -667,7 +698,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
                     return true;
                 }
                 if (infoOn) {
-                    info.setVisibility(View.GONE);
+                    hideInfo();
                     return true;
                 }
                 if (arch) {
@@ -701,8 +732,21 @@ public class PlayerActivity extends Activity implements Playback.Listener {
             default:
                 break;
         }
+        if (epgOn && epgSideEmpty.hasFocus() && (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT)) {
+            hideEpg(); // пустая телепрограмма: ◀ ▶ закрывают её, как и список
+            return true;
+        }
         if (sideOn || epgOn) return false; // списками управляет RecyclerView
-        if (infoOn && info.hasFocus()) {
+        // Цифры набирают номер канала всегда, даже когда открыта панель с кнопками.
+        if (k >= KeyEvent.KEYCODE_0 && k <= KeyEvent.KEYCODE_9) {
+            digit(k - KeyEvent.KEYCODE_0);
+            return true;
+        }
+        if (k >= KeyEvent.KEYCODE_NUMPAD_0 && k <= KeyEvent.KEYCODE_NUMPAD_9) {
+            digit(k - KeyEvent.KEYCODE_NUMPAD_0);
+            return true;
+        }
+        if (infoOn && btns && info.hasFocus()) {
             if (k == KeyEvent.KEYCODE_DPAD_UP) {
                 zap(1);
                 return true;
@@ -712,14 +756,6 @@ public class PlayerActivity extends Activity implements Playback.Listener {
                 return true;
             }
             return false; // ◀ ▶ OK — по кнопкам панели
-        }
-        if (k >= KeyEvent.KEYCODE_0 && k <= KeyEvent.KEYCODE_9) {
-            digit(k - KeyEvent.KEYCODE_0);
-            return true;
-        }
-        if (k >= KeyEvent.KEYCODE_NUMPAD_0 && k <= KeyEvent.KEYCODE_NUMPAD_9) {
-            digit(k - KeyEvent.KEYCODE_NUMPAD_0);
-            return true;
         }
         switch (k) {
             case KeyEvent.KEYCODE_DPAD_UP:
@@ -771,7 +807,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
                 if (side.getVisibility() == View.VISIBLE) hideSide();
                 else if (epgSide.getVisibility() == View.VISIBLE) hideEpg();
                 else if (pb.fatal) pb.retry();
-                else if (info.getVisibility() == View.VISIBLE) info.setVisibility(View.GONE);
+                else if (info.getVisibility() == View.VISIBLE) hideInfo();
                 else showInfo(false);
                 return true;
             }

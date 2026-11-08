@@ -309,7 +309,14 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         ui.postDelayed(updRun, 4000); // проверка обновлений не мешает запуску канала
     }
 
-    private final Runnable updRun = () -> Updater.check(this, false);
+    /** Окно обновления не показываем поверх заставки: ждём, пока она закончится. */
+    private final Runnable updRun = new Runnable() {
+        @Override
+        public void run() {
+            if (splash != null && splash.showing()) ui.postDelayed(this, 1500);
+            else Updater.check(MainActivity.this, false);
+        }
+    };
 
     @Override
     protected void onPause() {
@@ -360,8 +367,28 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             search.setText("");
             return;
         }
+        boolean list = body.getVisibility() == View.VISIBLE && ca.getItemCount() > 0;
+        // Пульт: «Назад» из групп, телепрограммы, окна или верхней строки сначала возвращает в список каналов.
+        if (list && !narrow && !channelsView.hasFocus() && !channelsView.isInTouchMode()) {
+            focusChannel(indexOfSel());
+            return;
+        }
+        // Телефон: с вкладки «Телепрограмма» — на «Каналы».
+        if (list && tEpg != null && tEpg.isSelected()) {
+            setTab(false);
+            return;
+        }
+        // Выход — только по второму нажатию: случайное «Назад» на пульте не закрывает приложение.
+        long now = System.currentTimeMillis();
+        if (now - backAt > 2500) {
+            backAt = now;
+            Ui.toast(this, "Нажмите «Назад» ещё раз, чтобы выйти");
+            return;
+        }
         super.onBackPressed();
     }
+
+    private long backAt;
 
     // ---------- Отрисовка ----------
 
