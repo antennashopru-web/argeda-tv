@@ -139,17 +139,19 @@ final class Updater {
 
     /** Файл со сведениями о последней версии в ветке update (его пишет workflow сборки). */
     private static final String MIRROR_INFO = MIRROR + "latest.json";
+    /** Та же ветка update через CDN jsDelivr — не GitHub, на случай если провайдер режет все адреса GitHub. */
+    private static final String CDN = "https://cdn.jsdelivr.net/gh/" + REPO + "@update/";
     private static final Pattern TAG_CODE = Pattern.compile("/releases/tag/v\\d+\\.\\d+\\.(\\d+)$");
 
     /**
      * Узнать последнюю версию. У части провайдеров (особенно мобильных) api.github.com отвечает 5xx
-     * или не открывается, поэтому три способа по очереди: API, latest.json в ветке update
+     * или не открывается, поэтому четыре способа: API, latest.json в ветке update (напрямую и через jsDelivr)
      * и переадресация github.com/…/releases/latest на страницу тега. Ошибка — от первого способа.
      */
     static Release find() throws Exception {
-        // Все три способа сразу и параллельно: берём первый удачный ответ. Если адрес висит
+        // Все способы сразу и параллельно: берём первый удачный ответ. Если адрес висит
         // (провайдер не пускает), не ждём его тайм-аута по очереди — проверка укладывается в ~20 с.
-        ExecutorService pool = Executors.newFixedThreadPool(3);
+        ExecutorService pool = Executors.newFixedThreadPool(4);
         try {
             java.util.concurrent.CompletionService<Release> cs = new java.util.concurrent.ExecutorCompletionService<>(pool);
             final java.util.concurrent.atomic.AtomicReference<Exception> apiErr = new java.util.concurrent.atomic.AtomicReference<>();
@@ -162,13 +164,14 @@ final class Updater {
                 }
             });
             cs.submit(() -> fromMirror(Net.getTextQuick(MIRROR_INFO, Net.UA, 1 << 16)));
+            cs.submit(() -> fromMirror(Net.getTextQuick(CDN + "latest.json", Net.UA, 1 << 16)));
             cs.submit(() -> {
                 Release r = fromRedirect();
                 if (r == null) throw new IOException("нет переадресации");
                 return r;
             });
             long until = System.currentTimeMillis() + 20000;
-            for (int i = 0; i < 3; i++) {
+            for (int i = 0; i < 4; i++) {
                 long left = until - System.currentTimeMillis();
                 java.util.concurrent.Future<Release> f = left > 0 ? cs.poll(left, java.util.concurrent.TimeUnit.MILLISECONDS) : null;
                 if (f == null) break;
@@ -259,6 +262,7 @@ final class Updater {
         if (browser != null && !browser.isEmpty()) l.add(new Source(browser, null));
         l.add(new Source("https://github.com/" + REPO + "/releases/latest/download/" + name, null));
         l.add(new Source(MIRROR + name, null));
+        l.add(new Source(CDN + name, null));
         return l;
     }
 
