@@ -1,14 +1,19 @@
-"""Сводит звук заставки: вступление ElevenLabs (sting_1 — нарастание, sting_2 — звон на «удар»)
-и голос «ARGEDA TV» в app/src/main/res/raw/argeda_tv.mp3.
-Время «удара» совпадает со Splash.HIT (0,62 с). Запуск из корня репозитория: python3 tools/sound/mix.py
+"""Сводит звук заставки ARGEDA TV из материалов ElevenLabs.
+
+Вариант N: мощный звук tools/sound/v/fx_N.mp3 (его пик совпадает с «ударом» анимации, Splash.HIT = 0,62 с;
+перед ним — обратный «засос» этого же звука) и басовый голос tools/sound/v/voice_N.mp3 сразу после удара.
+Запуск из корня репозитория:
+  python3 tools/sound/mix.py N out.mp3        — собрать вариант N в файл
+  python3 tools/sound/mix.py N                — собрать вариант N в res/raw/argeda_tv.mp3
 """
 import subprocess
+import sys
 
 import numpy as np
 
 SR = 44100
-D = "tools/sound/"
-RISE_AT, HIT_AT, VOICE_AT = 0.20, 0.60, 1.05
+HIT = 0.62
+VOICE_AT = HIT + 0.33
 
 
 def load(path):
@@ -17,36 +22,58 @@ def load(path):
     return np.frombuffer(raw, dtype=np.float32).astype(np.float64)
 
 
+def trim(x, db=-45):
+    thr = 10 ** (db / 20)
+    idx = np.where(np.abs(x) > thr)[0]
+    return x[idx[0]: idx[-1] + 1] if len(idx) else x
+
+
+def peak_time(x):
+    w = int(0.02 * SR)
+    e = np.convolve(x * x, np.ones(w) / w, mode="same")
+    return int(np.argmax(e))
+
+
 def place(buf, sig, at, gain=1.0):
-    i = int(at * SR)
+    i = int(round(at * SR))
+    if i < 0:
+        sig, i = sig[-i:], 0
     j = min(len(buf), i + len(sig))
     buf[i:j] += gain * sig[: j - i]
 
 
-def main():
-    rise, hit, voice = load(D + "sting_1.mp3"), load(D + "sting_2.mp3"), load(D + "voice.mp3")
-    rise = rise[: int(0.42 * SR)]
-    rise *= np.clip((0.42 * SR - np.arange(len(rise))) / (0.03 * SR), 0, 1)  # мягкий обрез хвоста
-    total = VOICE_AT + len(voice) / SR + 0.25
+def build(n, out):
+    fx, voice = trim(load(f"tools/sound/v/fx_{n}.mp3")), trim(load(f"tools/sound/v/voice_{n}.mp3"))
+    voice /= np.abs(voice).max() + 1e-9
+    fx /= np.abs(fx).max() + 1e-9
+    total = VOICE_AT + len(voice) / SR + 0.3
     mus = np.zeros(int(total * SR))
-    place(mus, rise, RISE_AT, 0.8)
-    place(mus, hit, HIT_AT, 1.0)
-    # простое эхо даёт звону «зал»
+    p = peak_time(fx)
+    fx_at = HIT - p / SR
+    # если у звука нет своего нарастания, добавляем «засос»: тот же звук задом наперёд перед ударом
+    if p / SR < 0.25:
+        rev = fx[: int(0.5 * SR)][::-1].copy()
+        rev *= np.linspace(0, 1, len(rev)) ** 2
+        place(mus, rev, HIT - len(rev) / SR, 0.6)
+    place(mus, fx, fx_at, 1.0)
+    # хвост-эхо делает удар больше
     echo = np.zeros_like(mus)
-    for k, g in ((0.11, 0.35), (0.23, 0.2), (0.37, 0.1)):
+    for k, g in ((0.09, 0.3), (0.19, 0.18), (0.31, 0.1)):
         place(echo, mus, k, g)
     mus += echo
     t = np.arange(len(mus)) / SR
-    mus *= 1 - 0.5 * np.clip((t - (VOICE_AT - 0.06)) / 0.1, 0, 1)  # музыка тише под голосом
-    mix = mus / (np.abs(mus).max() + 1e-9) * 0.6
-    place(mix, voice / (np.abs(voice).max() + 1e-9), VOICE_AT, 0.95)
-    mix *= np.clip((total - t) / 0.2, 0, 1)
+    mus *= 1 - 0.55 * np.clip((t - (VOICE_AT - 0.05)) / 0.1, 0, 1)  # тише под голосом
+    mus = mus / (np.abs(mus).max() + 1e-9) * 0.85
+    mix = mus.copy()
+    place(mix, voice, VOICE_AT, 1.0)
+    mix *= np.clip((total - t) / 0.25, 0, 1)
     mix *= 0.97 / np.abs(mix).max()
     pcm = (mix * 32767).astype("<i2").tobytes()
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "s16le", "-ar", str(SR), "-ac", "1", "-i", "-",
-                    "-c:a", "libmp3lame", "-b:a", "96k", "app/src/main/res/raw/argeda_tv.mp3"], input=pcm, check=True)
-    print(f"argeda_tv.mp3: {total:.2f} с, удар {HIT_AT} с, голос {VOICE_AT} с")
+                    "-af", "acompressor=threshold=-14dB:ratio=3:attack=5:release=120,alimiter=limit=0.95",
+                    "-c:a", "libmp3lame", "-b:a", "128k", out], input=pcm, check=True)
+    print(f"{out}: {total:.2f} с")
 
 
 if __name__ == "__main__":
-    main()
+    build(int(sys.argv[1]), sys.argv[2] if len(sys.argv) > 2 else "app/src/main/res/raw/argeda_tv.mp3")
