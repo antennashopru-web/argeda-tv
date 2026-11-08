@@ -108,16 +108,34 @@ final class Net {
         download(url, ua, null, out, max);
     }
 
+    /** Ход скачивания: done байт из total (total = -1, если сервер не сообщил размер). */
+    interface Progress {
+        void on(long done, long total) throws IOException;
+    }
+
     static void download(String url, String ua, String accept, File out, long max) throws IOException {
+        download(url, ua, accept, out, max, null);
+    }
+
+    static void download(String url, String ua, String accept, File out, long max, Progress p) throws IOException {
         HttpURLConnection c = open(url, ua, accept);
+        long len = -1;
+        if (c.getContentEncoding() == null) {
+            try {
+                len = Long.parseLong(c.getHeaderField("Content-Length"));
+            } catch (Exception ignored) {
+            }
+        }
         try (InputStream in = body(c); OutputStream o = new FileOutputStream(out)) {
             byte[] buf = new byte[65536];
             long total = 0;
             int n;
+            if (p != null) p.on(0, len);
             while ((n = in.read(buf)) > 0) {
                 total += n;
                 if (total > max) throw new IOException("Файл слишком большой");
                 o.write(buf, 0, n);
+                if (p != null) p.on(total, len);
             }
         } finally {
             c.disconnect();
