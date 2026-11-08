@@ -60,6 +60,15 @@ final class Updater {
         }
     }
 
+    static String versionName(Context c) {
+        try {
+            String v = c.getPackageManager().getPackageInfo(c.getPackageName(), 0).versionName;
+            return v == null ? "" : v;
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
     /** manual — из меню: проверяем сразу и сообщаем, если обновлений нет. */
     static void check(Activity a, boolean manual) {
         if (running) {
@@ -76,6 +85,7 @@ final class Updater {
         running = true;
         if (manual) Ui.toast(a, "Проверяю обновления…");
         final long have = installedCode(a);
+        final Context app = a.getApplicationContext();
         bg.execute(() -> {
             String err = null, url = null, api = null, tag = null, notes = "";
             long code = 0, size = 0;
@@ -92,7 +102,7 @@ final class Updater {
                 err = e.code == 404 ? "Обновлений пока нет"
                         : e.code >= 500 ? "Сервер GitHub временно недоступен, попробуйте позже" : e.getMessage();
             } catch (Exception e) {
-                err = "Не удалось проверить обновления";
+                err = e.getMessage() != null && e.getMessage().startsWith("Нет связи") ? e.getMessage() : "Не удалось проверить обновления";
             }
             final String fErr = err, fUrl = url, fTag = tag, fNotes = notes;
             final long fCode = code;
@@ -102,11 +112,15 @@ final class Updater {
                 running = false;
                 boolean tell = manual || report;
                 report = false;
-                if (a.isFinishing()) return;
+                // Экран мог смениться (поворот, плеер) — тогда сообщаем через контекст приложения.
+                boolean gone = a.isFinishing() || a.isDestroyed();
+                Context t = gone ? app : a;
                 if (fErr != null) {
-                    if (tell) Ui.toast(a, fErr);
+                    if (tell) Ui.toast(t, fErr);
                 } else if (fUrl == null || fCode <= have) {
-                    if (tell) Ui.toast(a, "Установлена последняя версия");
+                    if (tell) Ui.toast(t, "Установлена последняя версия " + versionName(app));
+                } else if (gone) {
+                    Ui.toast(app, "Доступна новая версия " + fTag.replaceFirst("^v", "") + ". Меню → «Проверить обновления»");
                 } else {
                     offer(a, fSrc, fSize, fTag, fNotes);
                 }
@@ -130,26 +144,43 @@ final class Updater {
      * и переадресация github.com/…/releases/latest на страницу тега. Ошибка — от первого способа.
      */
     static Release find() throws Exception {
-        Exception first = null;
-        for (int round = 0; round < 2; round++) {
-            if (round > 0) Thread.sleep(3000);
-            try {
-                return fromApi(Net.getText(LATEST, Net.UA, 1 << 20));
-            } catch (Exception e) {
-                if (e instanceof Net.HttpError && ((Net.HttpError) e).code == 404) throw e;
-                if (first == null) first = e;
-            }
-            try {
-                return fromMirror(Net.getText(MIRROR_INFO, Net.UA, 1 << 16));
-            } catch (Exception ignored) {
-            }
-            try {
+        // Все три способа сразу и параллельно: берём первый удачный ответ. Если адрес висит
+        // (провайдер не пускает), не ждём его тайм-аута по очереди — проверка укладывается в ~20 с.
+        ExecutorService pool = Executors.newFixedThreadPool(3);
+        try {
+            java.util.concurrent.CompletionService<Release> cs = new java.util.concurrent.ExecutorCompletionService<>(pool);
+            final java.util.concurrent.atomic.AtomicReference<Exception> apiErr = new java.util.concurrent.atomic.AtomicReference<>();
+            cs.submit(() -> {
+                try {
+                    return fromApi(Net.getTextQuick(LATEST, Net.UA, 1 << 20));
+                } catch (Exception e) {
+                    apiErr.set(e);
+                    throw e;
+                }
+            });
+            cs.submit(() -> fromMirror(Net.getTextQuick(MIRROR_INFO, Net.UA, 1 << 16)));
+            cs.submit(() -> {
                 Release r = fromRedirect();
-                if (r != null) return r;
-            } catch (Exception ignored) {
+                if (r == null) throw new IOException("нет переадресации");
+                return r;
+            });
+            long until = System.currentTimeMillis() + 20000;
+            for (int i = 0; i < 3; i++) {
+                long left = until - System.currentTimeMillis();
+                java.util.concurrent.Future<Release> f = left > 0 ? cs.poll(left, java.util.concurrent.TimeUnit.MILLISECONDS) : null;
+                if (f == null) break;
+                try {
+                    Release r = f.get();
+                    if (r != null && r.code > 0) return r;
+                } catch (java.util.concurrent.ExecutionException ignored) {
+                }
             }
+            Exception e = apiErr.get();
+            if (e instanceof Net.HttpError) throw e;
+            throw new IOException("Нет связи с сервером обновлений. Проверьте интернет и попробуйте позже");
+        } finally {
+            pool.shutdownNow();
         }
-        throw first;
     }
 
     static Release fromApi(String json) throws Exception {
@@ -190,8 +221,8 @@ final class Updater {
         try {
             c.setInstanceFollowRedirects(false);
             c.setRequestMethod("HEAD");
-            c.setConnectTimeout(15000);
-            c.setReadTimeout(15000);
+            c.setConnectTimeout(8000);
+            c.setReadTimeout(10000);
             c.setRequestProperty("User-Agent", Net.UA);
             String loc = c.getResponseCode() / 100 == 3 ? c.getHeaderField("Location") : null;
             Matcher m = loc == null ? null : TAG_CODE.matcher(loc);

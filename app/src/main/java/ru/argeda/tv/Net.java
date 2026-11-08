@@ -41,14 +41,18 @@ final class Net {
 
     /** accept — заголовок Accept (null — не отправлять). */
     static HttpURLConnection open(String url, String ua, String accept) throws IOException {
+        return open(url, ua, accept, 15000, 30000);
+    }
+
+    static HttpURLConnection open(String url, String ua, String accept, int connectMs, int readMs) throws IOException {
         String u = url.trim();
         for (int hop = 0; hop < 6; hop++) {
             URL x = new URL(u);
             String proto = x.getProtocol();
             if (!"http".equals(proto) && !"https".equals(proto)) throw new IOException("Поддерживаются только ссылки http:// и https://");
             HttpURLConnection c = (HttpURLConnection) x.openConnection();
-            c.setConnectTimeout(15000);
-            c.setReadTimeout(30000);
+            c.setConnectTimeout(connectMs);
+            c.setReadTimeout(readMs);
             c.setInstanceFollowRedirects(false);
             c.setRequestProperty("User-Agent", ua == null || ua.isEmpty() ? UA : ua);
             c.setRequestProperty("Accept-Encoding", "gzip");
@@ -88,6 +92,16 @@ final class Net {
 
     static String getText(String url, String ua, int max) throws IOException {
         return text(get(url, ua, max));
+    }
+
+    /** Короткий запрос с малыми тайм-аутами: если сервер не отвечает, быстро пробуем другой. */
+    static String getTextQuick(String url, String ua, int max) throws IOException {
+        HttpURLConnection c = open(url, ua, null, 8000, 10000);
+        try (InputStream in = body(c)) {
+            return text(readAll(in, max));
+        } finally {
+            c.disconnect();
+        }
     }
 
     static void download(String url, String ua, File out, long max) throws IOException {
