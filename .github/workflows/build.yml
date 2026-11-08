@@ -73,9 +73,13 @@ jobs:
         run: |
           CODE=$((100 + VERSION_CODE))
           cp app/build/outputs/apk/release/app-release.apk "argeda-tv-$CODE.apk"
+          # Зрителю — одна понятная строка: «Что нового: …» из описания PR, иначе заголовок без «(#N)».
+          MSG="$(git log -1 --pretty=%B)"
+          NOTES="$(printf '%s\n' "$MSG" | sed -nE 's/^[[:space:]]*(Что|что) нового:[[:space:]]*//p' | head -n1)"
+          [ -n "$NOTES" ] || NOTES="$(git log -1 --pretty=%s | sed -E 's/[[:space:]]*\(#[0-9]+\)[[:space:]]*$//')"
           gh release create "v$VERSION_NAME" "argeda-tv-$CODE.apk" \
             --title "ARGEDA TV $VERSION_NAME" \
-            --notes "$(git log -1 --pretty=%B)"
+            --notes "$NOTES"
 
       # Запасная копия APK в ветке update (raw.githubusercontent.com): приложение качает её,
       # если сервер релизов GitHub отвечает ошибкой. В ветке всегда один коммит с одним файлом.
