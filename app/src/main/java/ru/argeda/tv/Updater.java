@@ -80,20 +80,13 @@ final class Updater {
             String err = null, url = null, api = null, tag = null, notes = "";
             long code = 0, size = 0;
             try {
-                JSONObject r = new JSONObject(latest());
-                tag = r.optString("tag_name", "");
-                notes = cleanNotes(r.optString("body", ""));
-                JSONArray as = r.optJSONArray("assets");
-                for (int i = 0; as != null && i < as.length(); i++) {
-                    JSONObject x = as.getJSONObject(i);
-                    Matcher m = ASSET.matcher(x.optString("name"));
-                    if (m.matches() && Long.parseLong(m.group(1)) > code) {
-                        code = Long.parseLong(m.group(1));
-                        url = x.optString("browser_download_url");
-                        api = x.optString("url");
-                        size = x.optLong("size", 0);
-                    }
-                }
+                Release r = find();
+                tag = r.tag;
+                notes = r.notes;
+                code = r.code;
+                url = r.url;
+                api = r.api;
+                size = r.size;
                 p.edit().putLong("updAt", System.currentTimeMillis()).apply();
             } catch (Net.HttpError e) {
                 err = e.code == 404 ? "Обновлений пока нет"
@@ -121,17 +114,95 @@ final class Updater {
         });
     }
 
-    /** Сведения о последнем релизе; при сбое сервера (5xx) или связи — ещё две попытки. */
-    private static String latest() throws Exception {
-        for (int i = 0; ; i++) {
+    /** Последний релиз: номер версии, тег, текст и откуда качать. */
+    static final class Release {
+        String tag = "", notes = "", url, api;
+        long code, size;
+    }
+
+    /** Файл со сведениями о последней версии в ветке update (его пишет workflow сборки). */
+    private static final String MIRROR_INFO = MIRROR + "latest.json";
+    private static final Pattern TAG_CODE = Pattern.compile("/releases/tag/v\\d+\\.\\d+\\.(\\d+)$");
+
+    /**
+     * Узнать последнюю версию. У части провайдеров (особенно мобильных) api.github.com отвечает 5xx
+     * или не открывается, поэтому три способа по очереди: API, latest.json в ветке update
+     * и переадресация github.com/…/releases/latest на страницу тега. Ошибка — от первого способа.
+     */
+    static Release find() throws Exception {
+        Exception first = null;
+        for (int round = 0; round < 2; round++) {
+            if (round > 0) Thread.sleep(3000);
             try {
-                return Net.getText(LATEST, Net.UA, 1 << 20);
-            } catch (Net.HttpError e) {
-                if (e.code < 500 || i >= 2) throw e;
-            } catch (IOException e) {
-                if (i >= 2) throw e;
+                return fromApi(Net.getText(LATEST, Net.UA, 1 << 20));
+            } catch (Exception e) {
+                if (e instanceof Net.HttpError && ((Net.HttpError) e).code == 404) throw e;
+                if (first == null) first = e;
             }
-            Thread.sleep(2000L * (i + 1));
+            try {
+                return fromMirror(Net.getText(MIRROR_INFO, Net.UA, 1 << 16));
+            } catch (Exception ignored) {
+            }
+            try {
+                Release r = fromRedirect();
+                if (r != null) return r;
+            } catch (Exception ignored) {
+            }
+        }
+        throw first;
+    }
+
+    static Release fromApi(String json) throws Exception {
+        JSONObject j = new JSONObject(json);
+        Release r = new Release();
+        r.tag = j.optString("tag_name", "");
+        r.notes = cleanNotes(j.optString("body", ""));
+        JSONArray as = j.optJSONArray("assets");
+        for (int i = 0; as != null && i < as.length(); i++) {
+            JSONObject x = as.getJSONObject(i);
+            Matcher m = ASSET.matcher(x.optString("name"));
+            if (m.matches() && Long.parseLong(m.group(1)) > r.code) {
+                r.code = Long.parseLong(m.group(1));
+                r.url = x.optString("browser_download_url");
+                r.api = x.optString("url");
+                r.size = x.optLong("size", 0);
+            }
+        }
+        return r;
+    }
+
+    /** latest.json: {"code":158,"tag":"v1.2.58","size":1201192,"notes":"…"}. */
+    static Release fromMirror(String json) throws Exception {
+        JSONObject j = new JSONObject(json);
+        Release r = new Release();
+        r.code = j.getLong("code");
+        r.tag = j.optString("tag", "");
+        r.size = j.optLong("size", 0);
+        r.notes = cleanNotes(j.optString("notes", ""));
+        r.url = "https://github.com/" + REPO + "/releases/download/" + r.tag + "/argeda-tv-" + r.code + ".apk";
+        return r;
+    }
+
+    /** github.com/…/releases/latest → …/releases/tag/v1.2.N; номер сборки N, versionCode = 100 + N. */
+    private static Release fromRedirect() throws IOException {
+        java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                new java.net.URL("https://github.com/" + REPO + "/releases/latest").openConnection();
+        try {
+            c.setInstanceFollowRedirects(false);
+            c.setRequestMethod("HEAD");
+            c.setConnectTimeout(15000);
+            c.setReadTimeout(15000);
+            c.setRequestProperty("User-Agent", Net.UA);
+            String loc = c.getResponseCode() / 100 == 3 ? c.getHeaderField("Location") : null;
+            Matcher m = loc == null ? null : TAG_CODE.matcher(loc);
+            if (m == null || !m.find()) return null;
+            Release r = new Release();
+            r.code = 100 + Long.parseLong(m.group(1));
+            r.tag = loc.substring(loc.lastIndexOf('/') + 1);
+            r.url = "https://github.com/" + REPO + "/releases/download/" + r.tag + "/argeda-tv-" + r.code + ".apk";
+            return r;
+        } finally {
+            c.disconnect();
         }
     }
 

@@ -80,9 +80,10 @@ jobs:
           gh release create "v$VERSION_NAME" "argeda-tv-$CODE.apk" \
             --title "ARGEDA TV $VERSION_NAME" \
             --notes "$NOTES"
+          echo "NOTES<<EOF_NOTES" >> "$GITHUB_ENV"; printf '%s\n' "$NOTES" >> "$GITHUB_ENV"; echo "EOF_NOTES" >> "$GITHUB_ENV"
 
       # Запасная копия APK в ветке update (raw.githubusercontent.com): приложение качает её,
-      # если сервер релизов GitHub отвечает ошибкой. В ветке всегда один коммит: APK с номером и он же под постоянным именем argeda-tv.apk.
+      # если сервер релизов GitHub отвечает ошибкой. В ветке всегда один коммит: APK с номером, он же под постоянным именем argeda-tv.apk и latest.json.
       - name: Запасная копия для автообновления
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED == '1'
         continue-on-error: true
@@ -90,10 +91,13 @@ jobs:
           CODE=$((100 + VERSION_CODE))
           D="$RUNNER_TEMP/update"
           mkdir -p "$D" && cp "argeda-tv-$CODE.apk" "$D/" && cp "argeda-tv-$CODE.apk" "$D/argeda-tv.apk"
+          # latest.json — сведения о версии на случай, если api.github.com у пользователя не открывается.
+          jq -n --argjson code "$CODE" --arg tag "v$VERSION_NAME" --argjson size "$(stat -c %s "argeda-tv-$CODE.apk")" \
+            --arg notes "$NOTES" '{code:$code, tag:$tag, size:$size, notes:$notes}' > "$D/latest.json"
           cd "$D"
           git init -q -b update
           # argeda-tv.apk — постоянная ссылка для ручной установки, всегда последняя версия.
-          git add "argeda-tv-$CODE.apk" argeda-tv.apk
+          git add "argeda-tv-$CODE.apk" argeda-tv.apk latest.json
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "ARGEDA TV $VERSION_NAME (код $CODE)"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" update
