@@ -11,6 +11,9 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import androidx.core.content.FileProvider;
 
@@ -303,16 +306,90 @@ final class Updater {
     /** Три круга по всем адресам, с паузой между кругами: сбои GitHub обычно проходят за секунды. */
     private static final long[] PAUSE = {0, 3000, 8000};
 
+    /** Окно с ходом скачивания: этап, полоса, мегабайты и проценты, кнопка «Отмена». */
+    private static final class Status {
+        final AlertDialog dialog;
+        final ProgressBar bar;
+        final TextView text;
+        volatile boolean cancelled;
+        long shownAt;
+
+        Status(Activity a) {
+            float dp = a.getResources().getDisplayMetrics().density;
+            LinearLayout box = new LinearLayout(a);
+            box.setOrientation(LinearLayout.VERTICAL);
+            int pad = (int) (24 * dp);
+            box.setPadding(pad, (int) (8 * dp), pad, 0);
+            text = new TextView(a);
+            text.setTextSize(16);
+            text.setText("Подключаюсь к серверу…");
+            bar = new ProgressBar(a, null, android.R.attr.progressBarStyleHorizontal);
+            bar.setMax(1000);
+            bar.setIndeterminate(true);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            lp.topMargin = (int) (12 * dp);
+            box.addView(text);
+            box.addView(bar, lp);
+            dialog = new AlertDialog.Builder(a)
+                    .setTitle("Скачиваю обновление")
+                    .setView(box)
+                    .setCancelable(false)
+                    .setNegativeButton("Отмена", (d, w) -> cancelled = true)
+                    .show();
+        }
+
+        void stage(String s) {
+            ui.post(() -> {
+                bar.setIndeterminate(true);
+                text.setText(s);
+            });
+        }
+
+        /** Не чаще 5 раз в секунду, чтобы не тормозить экран. */
+        void progress(long done, long total) {
+            long now = System.currentTimeMillis();
+            if (now - shownAt < 200 && done < total) return;
+            shownAt = now;
+            ui.post(() -> {
+                if (total > 0) {
+                    bar.setIndeterminate(false);
+                    bar.setProgress((int) (done * 1000 / total));
+                    text.setText(String.format(java.util.Locale.ROOT, "Скачано %s из %s МБ (%d%%)",
+                            mb(done), mb(total), done * 100 / total).replace('.', ','));
+                } else {
+                    text.setText(String.format(java.util.Locale.ROOT, "Скачано %s МБ", mb(done)).replace('.', ','));
+                }
+            });
+        }
+
+        void close() {
+            ui.post(() -> {
+                try {
+                    dialog.dismiss();
+                } catch (Exception ignored) {
+                }
+            });
+        }
+
+        private static String mb(long b) {
+            return String.format(java.util.Locale.ROOT, "%.1f", b / 1048576.0);
+        }
+    }
+
     private static void download(Activity a, List<Source> src, long size) {
-        Ui.toast(a, "Скачиваю обновление…");
+        final Status st = new Status(a);
         final File out = target(a);
         final File part = new File(out.getPath() + ".part");
+        final int tries = src.size() * PAUSE.length;
         bg.execute(() -> {
             String err = null;
             boolean ok = false;
+            int attempt = 0;
             Set<String> gone = new HashSet<>();
-            for (int round = 0; round < PAUSE.length && !ok; round++) {
+            for (int round = 0; round < PAUSE.length && !ok && !st.cancelled; round++) {
                 if (PAUSE[round] > 0) {
+                    st.stage("Сервер не отвечает. Новая попытка через " + PAUSE[round] / 1000 + " с…");
                     try {
                         Thread.sleep(PAUSE[round]);
                     } catch (InterruptedException e) {
@@ -320,9 +397,17 @@ final class Updater {
                     }
                 }
                 for (Source s : src) {
+                    if (st.cancelled) break;
                     if (gone.contains(s.url)) continue;
+                    attempt++;
+                    st.stage(attempt == 1 ? "Подключаюсь к серверу…"
+                            : "Пробую другой адрес (попытка " + attempt + " из " + tries + ")…");
                     try {
-                        Net.download(s.url, Net.UA, s.accept, part, 200L << 20);
+                        Net.download(s.url, Net.UA, s.accept, part, 200L << 20, (done, total) -> {
+                            if (st.cancelled) throw new IOException("отменено");
+                            st.progress(done, total > 0 ? total : size);
+                        });
+                        st.stage("Проверяю файл…");
                         verify(part, size);
                         //noinspection ResultOfMethodCallIgnored
                         out.delete();
@@ -341,9 +426,26 @@ final class Updater {
                 if (gone.size() == src.size()) break;
             }
             final String fErr = ok ? null : err;
+            final boolean cancelled = st.cancelled;
+            if (ok) st.stage("Открываю установщик…");
+            st.close();
             ui.post(() -> {
-                if (fErr != null) Ui.toast(a, "Не удалось скачать обновление: " + fErr);
-                else install(a, out);
+                if (cancelled) {
+                    Ui.toast(a, "Скачивание обновления отменено");
+                } else if (fErr != null) {
+                    if (a.isFinishing() || a.isDestroyed()) {
+                        Ui.toast(a.getApplicationContext(), "Не удалось скачать обновление: " + fErr);
+                        return;
+                    }
+                    new AlertDialog.Builder(a)
+                            .setTitle("Обновление не скачалось")
+                            .setMessage("Не удалось скачать обновление: " + fErr)
+                            .setPositiveButton("Повторить", (d, w) -> download(a, src, size))
+                            .setNegativeButton("Закрыть", null)
+                            .show();
+                } else {
+                    install(a, out);
+                }
             });
         });
     }
