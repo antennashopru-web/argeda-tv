@@ -101,6 +101,10 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "ARGEDA TV $VERSION_NAME (код $CODE)"
           git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" update
+          # jsDelivr кэширует ветку: сбрасываем кэш, чтобы через CDN сразу была видна новая версия.
+          for f in latest.json argeda-tv.apk "argeda-tv-$CODE.apk"; do
+            curl -fsS -m 30 "https://purge.jsdelivr.net/gh/${{ github.repository }}@update/$f" > /dev/null || echo "::warning::jsDelivr purge $f не удался"
+          done
 
       - name: Нет ключа подписи
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED != '1'
