@@ -387,6 +387,15 @@ final class Store {
         p.edit().putBoolean("preview", b).apply();
     }
 
+    /** Заставка с анимацией логотипа и голосом при запуске. */
+    boolean splash() {
+        return p.getBoolean("splash", true);
+    }
+
+    void setSplash(boolean b) {
+        p.edit().putBoolean("splash", b).apply();
+    }
+
     int fit() {
         return p.getInt("fit", 0);
     }

@@ -82,6 +82,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     private String curGroup = G_ALL, listKey = "";
     private int seenSeq;
     private final Handler ui = new Handler(Looper.getMainLooper());
+    /** Заставка при запуске; пока она видна, звук предпросмотра выключен, чтобы не мешать голосу. */
+    private Splash splash;
     private final Runnable filterRun = this::applyFilter;
     private Runnable groupRun;
     private final Runnable tick = new Runnable() {
@@ -255,6 +257,22 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             focusChannel(0);
             return true;
         });
+
+        if (b == null && st.splash()) splash = Splash.show(this, this::splashDone);
+    }
+
+    private void splashDone() {
+        if (pb.player != null) pb.player.setVolume(1f);
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        // Пока идёт заставка, любая кнопка пульта только пропускает её.
+        if (splash != null && splash.showing()) {
+            if (e.getAction() == KeyEvent.ACTION_UP) splash.skip();
+            return true;
+        }
+        return super.dispatchKeyEvent(e);
     }
 
     @Override
@@ -262,6 +280,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         super.onStart();
         pb.acquire();
         preview.setPlayer(pb.player);
+        if (splash != null && splash.showing() && pb.player != null) pb.player.setVolume(0f);
         pb.addListener(this);
         if (!st.preview() && pb.channel != null) pb.stop();
         playbackChanged();
@@ -270,6 +289,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     @Override
     protected void onStop() {
         super.onStop();
+        if (splash != null) splash.cancel();
+        splash = null;
         ui.removeCallbacks(previewRun);
         ui.removeCallbacks(updRun);
         pb.removeListener(this);
@@ -798,6 +819,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             items.add("Изменить PIN-код");
             acts.add(this::changePin);
         }
+        items.add(st.splash() ? "Заставка при запуске: выключить" : "Заставка при запуске: включить");
+        acts.add(() -> st.setSplash(!st.splash()));
         items.add("Тема: " + Themes.NAMES[Themes.get(this)]);
         acts.add(this::chooseTheme);
         items.add("Проверить обновления");
