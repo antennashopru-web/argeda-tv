@@ -65,7 +65,7 @@
                 android:layout_weight="1" android:singleLine="true" android:ellipsize="end"
                 android:textColor="@color/text" android:textSize="22sp" android:textStyle="bold" />
             <TextView android:id="@+id/infoClock" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:textColor="@color/muted" android:textSize="16sp" />
+                android:layout_marginStart="12dp" android:textColor="@color/muted" android:textSize="16sp" />
         </LinearLayout>
         <TextView android:id="@+id/infoGroup" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="2dp" android:textColor="@color/muted" android:textSize="14sp" />
@@ -78,10 +78,9 @@
         <TextView android:id="@+id/infoNext" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="6dp" android:singleLine="true" android:ellipsize="end"
             android:textColor="@color/muted" android:textSize="14sp" android:visibility="gone" />
-        <HorizontalScrollView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="12dp" android:scrollbars="none" android:fillViewport="false">
-            <LinearLayout android:id="@+id/infoBtns" android:layout_width="wrap_content" android:layout_height="wrap_content"
-                android:orientation="horizontal">
+        <!-- Кнопки переносятся на новую строку, если не помещаются (телефон в книжной ориентации). -->
+            <ru.argeda.tv.FlowRow android:id="@+id/infoBtns" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:layout_marginTop="12dp">
                 <TextView android:id="@+id/bLive" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginEnd="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
@@ -136,7 +135,6 @@
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
                     android:drawableStart="@drawable/ic_info" android:drawablePadding="8dp"
                     android:text="Сведения" android:textColor="@color/text" />
-            </LinearLayout>
-        </HorizontalScrollView>
+            </ru.argeda.tv.FlowRow>
     </LinearLayout>
 </FrameLayout>

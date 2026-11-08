@@ -1000,12 +1000,14 @@ public class PlayerActivity extends Activity implements Playback.Listener {
             return true;
         }
         if (infoOn && btns && info.hasFocus()) {
-            if (k == KeyEvent.KEYCODE_DPAD_UP) {
-                zap(1);
-                return true;
-            }
-            if (k == KeyEvent.KEYCODE_DPAD_DOWN) {
-                zap(-1);
+            if (k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN) {
+                // Кнопки могут стоять в две строки: ▲▼ сначала переходят между ними, а с крайней строки — листают каналы.
+                View f = getCurrentFocus(), n = f == null ? null : f.focusSearch(k == KeyEvent.KEYCODE_DPAD_UP ? View.FOCUS_UP : View.FOCUS_DOWN);
+                if (n != null && n != f && n.getParent() == f.getParent()) {
+                    n.requestFocus();
+                    return true;
+                }
+                zap(k == KeyEvent.KEYCODE_DPAD_UP ? 1 : -1);
                 return true;
             }
             return false; // ◀ ▶ OK — по кнопкам панели
