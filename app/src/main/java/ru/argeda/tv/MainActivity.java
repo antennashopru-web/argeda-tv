@@ -409,7 +409,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         if (s == null) {
             show(empty);
             emptyText.setText("Добавьте плейлист вашего IPTV-провайдера");
-            emptyBtn.setText("＋  Добавить плейлист");
+            emptyBtn.setText("Добавить плейлист");
+            emptyBtn.setCompoundDrawablesRelativeWithIntrinsicBounds(R.drawable.ic_plus, 0, 0, 0);
             source.setText("Плейлисты  ▾");
             return;
         }
@@ -422,6 +423,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
                 show(empty);
                 emptyText.setText(st.status.isEmpty() ? "В плейлисте нет каналов" : "Не удалось загрузить плейлист\n" + st.status);
                 emptyBtn.setText("Изменить плейлист");
+                emptyBtn.setCompoundDrawablesRelativeWithIntrinsicBounds(0, 0, 0, 0);
             }
             if (narrow) source.setText("Плейлисты  ▾");
             return;
@@ -855,10 +857,9 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         List<String> items = new ArrayList<>();
         List<Runnable> acts = new ArrayList<>();
         Source s = st.current();
-        if (narrow || s == null) {
-            items.add("Плейлисты…");
-            acts.add(this::pickSource);
-        }
+        // Плейлист выбирается здесь, в настройках (в верхней строке на ТВ его нет).
+        items.add(s == null ? "Плейлист: добавить…" : "Плейлист: " + s.title() + "…");
+        acts.add(this::pickSource);
         if (s != null) {
             items.add("Обновить плейлист");
             acts.add(() -> {
@@ -896,7 +897,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         acts.add(() -> Updater.check(this, true));
         items.add("О приложении");
         acts.add(this::about);
-        new AlertDialog.Builder(this).setItems(items.toArray(new String[0]), (d, w) -> acts.get(w).run()).show();
+        new AlertDialog.Builder(this).setTitle("Настройки")
+                .setItems(items.toArray(new String[0]), (d, w) -> acts.get(w).run()).show();
     }
 
     private void chooseTheme() {
