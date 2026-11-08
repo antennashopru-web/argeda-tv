@@ -105,6 +105,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         setContentView(R.layout.activity_main);
+        Ui.tvSafeArea(this);
         st = Store.get(this);
         pb = Playback.get(this);
         Logos.init(this);
