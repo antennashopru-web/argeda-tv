@@ -462,10 +462,16 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         }
         groups.clear();
         if (favN > 0) groups.add(new Group(G_FAV, "★  Избранное", favN));
+        // Избранные категории — сразу под «Избранным», в том порядке, в каком их добавляли.
+        for (String g : st.favGroups) {
+            Integer n = m.get(g);
+            if (n != null) groups.add(new Group(g, "★  " + Channel.groupTitle(g), n));
+        }
         int recN = recentOf(vis).size();
         if (recN > 0) groups.add(new Group(G_REC, "Недавние", recN));
         groups.add(new Group(G_ALL, "Все каналы", vis.size()));
-        for (Map.Entry<String, Integer> e : m.entrySet()) groups.add(new Group(e.getKey(), Channel.groupTitle(e.getKey()), e.getValue()));
+        for (Map.Entry<String, Integer> e : m.entrySet())
+            if (!st.isFavGroup(e.getKey())) groups.add(new Group(e.getKey(), Channel.groupTitle(e.getKey()), e.getValue()));
         if (indexOfGroup(curGroup) < 0) curGroup = G_ALL;
         ga.notifyDataSetChanged();
         if (narrow) source.setText(titleOf(curGroup) + "  ▾");
@@ -767,6 +773,25 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         else ca.notifyItemChanged(pos, "t");
     }
 
+    /** Долгое нажатие на категорию: добавить её в избранное (наверх списка) или убрать оттуда. */
+    private void toggleFavGroup(String id) {
+        if (id.startsWith("\u0001")) {
+            Ui.toast(this, "В избранное можно добавить категорию из плейлиста");
+            return;
+        }
+        boolean on = st.toggleFavGroup(id);
+        String t = Channel.groupTitle(id);
+        Ui.toast(this, on ? "Категория «" + t + "» добавлена в избранное" : "Категория «" + t + "» убрана из избранного");
+        buildGroups();
+        if (!narrow) {
+            int i = indexOfGroup(id);
+            if (i >= 0) {
+                groupsView.scrollToPosition(i);
+                focusAt(groupsView, i, 10);
+            }
+        }
+    }
+
     private void addSource() {
         startActivity(new Intent(this, SourceActivity.class));
     }
@@ -809,10 +834,21 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             labels[i] = g.title + "  (" + g.count + ")";
             if (g.id.equals(curGroup)) sel = i;
         }
-        new AlertDialog.Builder(this).setTitle(s.title()).setSingleChoiceItems(labels, sel, (d, w) -> {
-            d.dismiss();
+        AlertDialog d = new AlertDialog.Builder(this).setTitle(s.title()).setSingleChoiceItems(labels, sel, (dd, w) -> {
+            dd.dismiss();
             selectGroup(groups.get(w).id, true);
-        }).show();
+        }).create();
+        d.show();
+        // Долгое нажатие на категорию — в избранное или из избранного.
+        d.getListView().setOnItemLongClickListener((parent, v, w, id) -> {
+            if (w < 0 || w >= groups.size()) return false;
+            String gid = groups.get(w).id;
+            if (gid.startsWith("\u0001")) return false;
+            d.dismiss();
+            toggleFavGroup(gid);
+            pickGroup();
+            return true;
+        });
     }
 
     private void menu() {
@@ -956,7 +992,8 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
                 "Проигрыватель IPTV для приставок и телефонов. Своих каналов в приложении нет: "
                         + "оно показывает плейлист вашего провайдера (ссылка M3U, Xtream Codes или файл).\n\n"
                         + "Пульт в списке:\n▲ ▼ — выбор канала (он включается в окне справа)\nOK — на весь экран\n"
-                        + "▶ — телепрограмма и записи, ◀ — группы\nДолгое нажатие OK — избранное\n\n"
+                        + "▶ — телепрограмма и записи, ◀ — группы\nДолгое нажатие OK на канале — избранное\n"
+                        + "Долгое нажатие OK на категории — категория в избранном (наверху списка)\n\n"
                         + "Пульт на весь экран:\n▲ ▼ — каналы, OK или ◀ — список, ▶ — сведения и кнопки, цифры — номер канала\n"
                         + "В записи: ◀ ▶ — перемотка, «Назад» — вернуться в эфир\n\n"
                         + "Телефон: касание канала — в окне, второе касание — на весь экран. "
@@ -995,6 +1032,11 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             h.itemView.setOnClickListener(v -> {
                 int p = h.getBindingAdapterPosition();
                 if (p >= 0) selectGroup(groups.get(p).id, true);
+            });
+            h.itemView.setOnLongClickListener(v -> {
+                int p = h.getBindingAdapterPosition();
+                if (p >= 0) toggleFavGroup(groups.get(p).id);
+                return true;
             });
             h.itemView.setOnFocusChangeListener((v, focused) -> {
                 int p = h.getBindingAdapterPosition();

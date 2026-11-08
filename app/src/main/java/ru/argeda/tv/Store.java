@@ -67,6 +67,8 @@ final class Store {
     private int gen;
 
     private final Set<String> fav = new HashSet<>();
+    /** Избранные категории (группы плейлиста) в порядке добавления: их показывают наверху списка групп. */
+    final List<String> favGroups = new ArrayList<>();
     final List<String> recent = new ArrayList<>();
     String lastKey;
     /** Каналы 18+ открываются PIN-кодом до выхода из приложения. */
@@ -97,6 +99,11 @@ final class Store {
         }
         curId = p.getString("cur", "");
         fav.addAll(p.getStringSet("fav", new HashSet<>()));
+        try {
+            JSONArray a = new JSONArray(p.getString("favg", "[]"));
+            for (int i = 0; i < a.length(); i++) favGroups.add(a.getString(i));
+        } catch (JSONException ignored) {
+        }
         try {
             JSONArray a = new JSONArray(p.getString("recent", "[]"));
             for (int i = 0; i < a.length(); i++) recent.add(a.getString(i));
@@ -367,6 +374,17 @@ final class Store {
         boolean on = !fav.remove(k);
         if (on) fav.add(k);
         p.edit().putStringSet("fav", new HashSet<>(fav)).apply();
+        return on;
+    }
+
+    boolean isFavGroup(String g) {
+        return favGroups.contains(g);
+    }
+
+    boolean toggleFavGroup(String g) {
+        boolean on = !favGroups.remove(g);
+        if (on) favGroups.add(g);
+        p.edit().putString("favg", new JSONArray(favGroups).toString()).apply();
         return on;
     }
 
