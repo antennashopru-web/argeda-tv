@@ -119,6 +119,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
 
         pv = findViewById(R.id.pv);
         preview = findViewById(R.id.preview);
+        roundCorners(preview, 15);
         pBuf = findViewById(R.id.pBuf);
         pArch = findViewById(R.id.pArch);
         pMsg = findViewById(R.id.pMsg);
@@ -804,6 +805,18 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         items.add("О приложении");
         acts.add(this::about);
         new AlertDialog.Builder(this).setItems(items.toArray(new String[0]), (d, w) -> acts.get(w).run()).show();
+    }
+
+    /** Скругляет углы видео под рамку окна предпросмотра (работает с TextureView). */
+    private static void roundCorners(View v, float dp) {
+        final float r = dp * v.getResources().getDisplayMetrics().density;
+        v.setOutlineProvider(new android.view.ViewOutlineProvider() {
+            @Override
+            public void getOutline(View view, android.graphics.Outline o) {
+                o.setRoundRect(0, 0, view.getWidth(), view.getHeight(), r);
+            }
+        });
+        v.setClipToOutline(true);
     }
 
     private void chooseTheme() {

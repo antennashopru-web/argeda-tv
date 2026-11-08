@@ -50,7 +50,7 @@
             <ru.argeda.tv.RatioFrame android:id="@+id/pv" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:background="@drawable/preview_bg" android:focusable="true" android:clickable="true" android:padding="3dp">
                 <androidx.media3.ui.PlayerView android:id="@+id/preview" android:layout_width="match_parent"
-                    android:layout_height="match_parent" app:use_controller="false" app:resize_mode="fit"
+                    android:layout_height="match_parent" app:use_controller="false" app:resize_mode="fit" app:surface_type="texture_view"
                     app:shutter_background_color="@android:color/black" android:focusable="false" />
                 <ProgressBar android:id="@+id/pBuf" android:layout_width="40dp" android:layout_height="40dp"
                     android:layout_gravity="center" android:indeterminateTint="@color/accentLight" android:visibility="gone" />
