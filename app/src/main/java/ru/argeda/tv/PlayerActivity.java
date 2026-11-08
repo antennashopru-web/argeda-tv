@@ -47,7 +47,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     private PlayerView video;
     private View root, side, info, epgSide, buffering;
     private TextView error, digits, seek, sideTitle, epgTitle, epgSideEmpty, infoArch, infoNum, infoName, infoClock,
-            infoGroup, infoNow, infoNext, bList, bLive, bFav, bAudio;
+            infoGroup, infoNow, infoNext, bList, bLive, bFav, bAudio, bQuality, bSubs;
     private ProgressBar infoProg;
     private RecyclerView sideList, epgSideList;
     private ChannelAdapter sa;
@@ -122,6 +122,8 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         bLive = findViewById(R.id.bLive);
         bFav = findViewById(R.id.bFav);
         bAudio = findViewById(R.id.bAudio);
+        bQuality = findViewById(R.id.bQuality);
+        bSubs = findViewById(R.id.bSubs);
 
         list = st.playList;
         index = st.playIndex;
@@ -217,6 +219,9 @@ public class PlayerActivity extends Activity implements Playback.Listener {
             Ui.toast(this, "Формат: " + FIT_NAMES[fit]);
         });
         bAudio.setOnClickListener(v -> pickAudio());
+        bQuality.setOnClickListener(v -> pickQuality());
+        bSubs.setOnClickListener(v -> pickSubs());
+        findViewById(R.id.bStats).setOnClickListener(v -> showStats());
         TextView bSleep = findViewById(R.id.bSleep);
         bSleep.setText("Сон: " + Alerts.sleepLabel());
         bSleep.setOnClickListener(v -> {
@@ -276,6 +281,40 @@ public class PlayerActivity extends Activity implements Playback.Listener {
             lp.width = w;
             v.setLayoutParams(lp);
         }
+    }
+
+    /** Телефон: кнопка «Домой» во время просмотра — «картинка в картинке» (Android 8+). */
+    @SuppressLint("NewApi")
+    @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        if (tv || android.os.Build.VERSION.SDK_INT < 26 || pb.player == null || !pb.player.isPlaying()) return;
+        try {
+            int w = 16, h = 9;
+            Format f = pb.player.getVideoFormat();
+            if (f != null && f.width > 0 && f.height > 0) {
+                w = f.width;
+                h = f.height;
+                if (w * 100 > h * 239) h = w * 100 / 239; // система принимает от 1:2,39 до 2,39:1
+                if (h * 100 > w * 239) w = h * 100 / 239;
+            }
+            enterPictureInPictureMode(new android.app.PictureInPictureParams.Builder()
+                    .setAspectRatio(new android.util.Rational(w, h)).build());
+        } catch (Exception ignored) {
+            // устройство не поддерживает «картинку в картинке»
+        }
+    }
+
+    @SuppressLint("NewApi")
+    @Override
+    public void onPictureInPictureModeChanged(boolean pip, Configuration c) {
+        super.onPictureInPictureModeChanged(pip, c);
+        if (!pip) return;
+        hideInfo();
+        hideSide();
+        hideEpg();
+        digits.setVisibility(View.GONE);
+        seek.setVisibility(View.GONE);
     }
 
     @Override
@@ -350,6 +389,8 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         infoArch.setVisibility(arch ? View.VISIBLE : View.GONE);
         bLive.setVisibility(arch ? View.VISIBLE : View.GONE);
         bAudio.setVisibility(audioTracks().size() > 1 ? View.VISIBLE : View.GONE);
+        bQuality.setVisibility(tracks(C.TRACK_TYPE_VIDEO).size() > 1 ? View.VISIBLE : View.GONE);
+        bSubs.setVisibility(!tracks(C.TRACK_TYPE_TEXT).isEmpty() ? View.VISIBLE : View.GONE);
         // «В прямой эфир» исчезла под фокусом — переводим его на соседнюю кнопку, а не в пустоту.
         if (btns && info.getVisibility() == View.VISIBLE && !info.hasFocus()) bList.requestFocus();
         if (info.getVisibility() == View.VISIBLE) fillTime();
@@ -500,6 +541,118 @@ public class PlayerActivity extends Activity implements Playback.Listener {
             }
         }
         return r;
+    }
+
+    /** Дорожки видео (качество) или субтитров. */
+    private List<Track> tracks(int type) {
+        List<Track> r = new ArrayList<>();
+        if (pb.player == null) return r;
+        for (Tracks.Group g : pb.player.getCurrentTracks().getGroups()) {
+            if (g.getType() != type) continue;
+            for (int i = 0; i < g.length; i++) {
+                if (!g.isTrackSupported(i)) continue;
+                Format f = g.getTrackFormat(i);
+                String label;
+                if (type == C.TRACK_TYPE_VIDEO) {
+                    label = f.height > 0 ? f.height + "p" : "Вариант " + (r.size() + 1);
+                    if (f.bitrate > 0) label += String.format(Locale.ROOT, "  ·  %.1f Мбит/с", f.bitrate / 1e6).replace('.', ',');
+                } else {
+                    label = f.label != null ? f.label
+                            : f.language != null && !"und".equals(f.language) ? new Locale(f.language).getDisplayLanguage()
+                            : "Субтитры " + (r.size() + 1);
+                }
+                r.add(new Track(g, i, label, g.isTrackSelected(i)));
+            }
+        }
+        if (type == C.TRACK_TYPE_VIDEO) {
+            java.util.Collections.sort(r, (a, b) -> Integer.compare(b.g.getTrackFormat(b.i).height, a.g.getTrackFormat(a.i).height));
+        }
+        return r;
+    }
+
+    /** Качество: «Авто» — по скорости интернета, иначе одно выбранное. */
+    private void pickQuality() {
+        List<Track> ts = tracks(C.TRACK_TYPE_VIDEO);
+        if (ts.size() < 2 || pb.player == null) return;
+        boolean auto = !pb.player.getTrackSelectionParameters().overrides.containsKey(ts.get(0).g.getMediaTrackGroup());
+        String[] names = new String[ts.size() + 1];
+        names[0] = "Авто";
+        int sel = 0;
+        for (int i = 0; i < ts.size(); i++) {
+            names[i + 1] = ts.get(i).label;
+            if (!auto && ts.get(i).sel) sel = i + 1;
+        }
+        new AlertDialog.Builder(this).setTitle("Качество").setSingleChoiceItems(names, sel, (d, w) -> {
+            d.dismiss();
+            if (pb.player == null) return;
+            androidx.media3.common.TrackSelectionParameters.Builder b = pb.player.getTrackSelectionParameters().buildUpon();
+            if (w == 0) b.clearOverridesOfType(C.TRACK_TYPE_VIDEO);
+            else b.setOverrideForType(new TrackSelectionOverride(ts.get(w - 1).g.getMediaTrackGroup(), ts.get(w - 1).i));
+            pb.player.setTrackSelectionParameters(b.build());
+        }).show();
+    }
+
+    private void pickSubs() {
+        List<Track> ts = tracks(C.TRACK_TYPE_TEXT);
+        if (ts.isEmpty() || pb.player == null) return;
+        boolean off = pb.player.getTrackSelectionParameters().disabledTrackTypes.contains(C.TRACK_TYPE_TEXT);
+        String[] names = new String[ts.size() + 1];
+        names[0] = "Выключены";
+        int sel = 0;
+        for (int i = 0; i < ts.size(); i++) {
+            names[i + 1] = ts.get(i).label;
+            if (!off && ts.get(i).sel) sel = i + 1;
+        }
+        new AlertDialog.Builder(this).setTitle("Субтитры").setSingleChoiceItems(names, sel, (d, w) -> {
+            d.dismiss();
+            if (pb.player == null) return;
+            androidx.media3.common.TrackSelectionParameters.Builder b = pb.player.getTrackSelectionParameters().buildUpon();
+            if (w == 0) b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true);
+            else b.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(new TrackSelectionOverride(ts.get(w - 1).g.getMediaTrackGroup(), ts.get(w - 1).i));
+            pb.player.setTrackSelectionParameters(b.build());
+        }).show();
+    }
+
+    /** Сведения о потоке: разрешение, кодеки, скорость, частота кадров. */
+    @OptIn(markerClass = UnstableApi.class)
+    private void showStats() {
+        if (pb.player == null) return;
+        StringBuilder s = new StringBuilder();
+        Format v = pb.player.getVideoFormat(), a = pb.player.getAudioFormat();
+        if (v != null) {
+            s.append("Видео: ").append(v.width).append("×").append(v.height);
+            if (v.frameRate > 0) s.append(", ").append(Math.round(v.frameRate)).append(" кадр/с");
+            if (v.sampleMimeType != null) s.append("\nКодек видео: ").append(codec(v.sampleMimeType));
+            if (v.bitrate > 0) s.append(String.format(Locale.ROOT, "\nПоток видео: %.1f Мбит/с", v.bitrate / 1e6).replace('.', ','));
+        } else s.append("Видео: нет данных");
+        if (a != null) {
+            s.append("\nЗвук: ").append(a.sampleMimeType != null ? codec(a.sampleMimeType) : "?");
+            if (a.channelCount > 0) s.append(", ").append(a.channelCount >= 6 ? "5.1" : a.channelCount == 2 ? "стерео" : a.channelCount + " кан.");
+            if (a.sampleRate > 0) s.append(", ").append(a.sampleRate / 1000).append(" кГц");
+        }
+        long buf = pb.player.getTotalBufferedDuration();
+        s.append(String.format(Locale.ROOT, "\nЗапас в буфере: %.1f с", buf / 1000.0).replace('.', ','));
+        long bw = pb.bandwidth();
+        if (bw > 0) s.append(String.format(Locale.ROOT, "\nСкорость интернета: %.1f Мбит/с", bw / 1e6).replace('.', ','));
+        Channel c = list.get(index);
+        s.append("\n\nСсылка: ").append(c.url);
+        new AlertDialog.Builder(this).setTitle(c.name).setMessage(s.toString()).setPositiveButton("OK", null).show();
+    }
+
+    private static String codec(String mime) {
+        switch (mime) {
+            case "video/avc": return "H.264";
+            case "video/hevc": return "H.265 (HEVC)";
+            case "video/mp2t": case "video/mpeg2": return "MPEG-2";
+            case "video/av01": return "AV1";
+            case "video/x-vnd.on2.vp9": return "VP9";
+            case "audio/mp4a-latm": return "AAC";
+            case "audio/ac3": return "Dolby Digital (AC-3)";
+            case "audio/eac3": return "Dolby Digital Plus";
+            case "audio/mpeg": case "audio/mpeg-L2": return "MPEG Audio";
+            default: return mime;
+        }
     }
 
     private void pickAudio() {

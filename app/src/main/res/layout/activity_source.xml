@@ -50,7 +50,7 @@
         </LinearLayout>
 
         <TextView style="@style/Label" android:layout_marginTop="22dp"
-            android:text="Телепрограмма XMLTV — необязательно" />
+            android:text="Телепрограмма XMLTV — необязательно, можно несколько адресов через запятую" />
         <EditText android:id="@+id/epg" style="@style/Field" android:hint="http://…/epg.xml.gz"
             android:inputType="textUri" android:imeOptions="actionNext" />
 

@@ -56,7 +56,14 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             this.title = title;
             this.count = count;
         }
+
+        /** Заголовок блока («МОЁ», «ПЛЕЙЛИСТ»): не выбирается. */
+        boolean header() {
+            return id.startsWith(G_HEAD);
+        }
     }
+
+    private static final String G_HEAD = "\u0002";
 
     private Store st;
     private Playback pb;
@@ -350,6 +357,12 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     }
 
     @Override
+    protected void onActivityResult(int req, int res, Intent data) {
+        super.onActivityResult(req, res, data);
+        Backup.result(this, req, res, data);
+    }
+
+    @Override
     public void changed() {
         render();
     }
@@ -358,6 +371,10 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     public boolean onKeyDown(int code, KeyEvent e) {
         if (code == KeyEvent.KEYCODE_MENU) {
             menu();
+            return true;
+        }
+        if (code == KeyEvent.KEYCODE_GUIDE) {
+            openGuide();
             return true;
         }
         if (code == KeyEvent.KEYCODE_SEARCH) {
@@ -465,13 +482,19 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             if (st.isFav(c)) favN++;
         }
         groups.clear();
-        if (favN > 0) groups.add(new Group(G_FAV, "★  Избранное", favN));
-        // Свои папки избранного — сразу под ним. Пустую папку тоже видно, чтобы было куда складывать.
-        for (Store.Folder f : st.folders) groups.add(new Group(G_FOLDER + f.name, "☆  " + f.name, folderChannels(f, vis).size()));
-        // Избранные категории — сразу под «Избранным», в том порядке, в каком их добавляли.
+        // Блок «МОЁ»: избранное, свои папки (пустую тоже видно, чтобы было куда складывать)
+        // и избранные категории в порядке добавления.
+        List<Group> mine = new ArrayList<>();
+        if (favN > 0) mine.add(new Group(G_FAV, "★  Избранное", favN));
+        for (Store.Folder f : st.folders) mine.add(new Group(G_FOLDER + f.name, "☆  " + f.name, folderChannels(f, vis).size()));
         for (String g : st.favGroups) {
             Integer n = m.get(g);
-            if (n != null) groups.add(new Group(g, "★  " + Channel.groupTitle(g), n));
+            if (n != null) mine.add(new Group(g, "▸  " + Channel.groupTitle(g), n));
+        }
+        if (!mine.isEmpty()) {
+            groups.add(new Group(G_HEAD + "my", "МОЁ", 0));
+            groups.addAll(mine);
+            groups.add(new Group(G_HEAD + "pl", "ПЛЕЙЛИСТ", 0));
         }
         int recN = recentOf(vis).size();
         if (recN > 0) groups.add(new Group(G_REC, "Недавние", recN));
@@ -520,9 +543,22 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             Store.Folder f = st.folder(g.substring(G_FOLDER.length()));
             return f == null ? new ArrayList<>() : folderChannels(f, vis);
         }
+        if (G_FAV.equals(g)) return ordered(st.favOrder, vis);
         List<Channel> r = new ArrayList<>();
-        boolean f = G_FAV.equals(g);
-        for (Channel c : vis) if (f ? st.isFav(c) : g.equals(c.group)) r.add(c);
+        for (Channel c : vis) if (g.equals(c.group)) r.add(c);
+        return r;
+    }
+
+    /** Каналы по списку ключей (избранное, папка) в его порядке. */
+    private static List<Channel> ordered(List<String> keys, List<Channel> vis) {
+        List<Channel> r = new ArrayList<>();
+        if (keys.isEmpty()) return r;
+        Map<String, Channel> m = new HashMap<>();
+        for (Channel c : vis) if (!m.containsKey(c.key())) m.put(c.key(), c);
+        for (String k : keys) {
+            Channel c = m.get(k);
+            if (c != null) r.add(c);
+        }
         return r;
     }
 
@@ -801,7 +837,35 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         labels.add((st.isFav(c) ? "✓  " : "      ") + "★  Избранное");
         for (Store.Folder f : st.folders) labels.add((st.inFolder(f, c) ? "✓  " : "      ") + "☆  " + f.name);
         labels.add("      ＋  Новая папка…");
+        // В избранном и в своей папке канал можно передвинуть: порядок сохраняется.
+        final Store.Folder inF = curGroup.startsWith(G_FOLDER) && search.length() == 0 ? st.folder(curGroup.substring(G_FOLDER.length())) : null;
+        final boolean movable = search.length() == 0 && (G_FAV.equals(curGroup) || inF != null);
+        int extra = labels.size();
+        if (movable) {
+            labels.add("      ▲  Передвинуть выше");
+            labels.add("      ▼  Передвинуть ниже");
+        }
+        labels.add("      ⊘  Скрыть канал");
+        final int moveAt = extra, hideAt = labels.size() - 1;
         new AlertDialog.Builder(this).setTitle(c.name).setItems(labels.toArray(new String[0]), (d, w) -> {
+            if (movable && (w == moveAt || w == moveAt + 1)) {
+                if (st.move(inF, c, w == moveAt ? -1 : 1)) {
+                    applyFilter();
+                    int i = ca.items().indexOf(c);
+                    if (i >= 0) {
+                        select(c, PREVIEW_NONE);
+                        focusChannel(i);
+                    }
+                }
+                return;
+            }
+            if (w == hideAt) {
+                st.setHidden(c, true);
+                Ui.toast(this, "«" + c.name + "» скрыт. Вернуть: Настройки → «Скрытые каналы и категории»");
+                if (same(pb.channel, c)) pb.stop();
+                render();
+                return;
+            }
             if (w == 0) {
                 boolean on = st.toggleFav(c);
                 Ui.toast(this, on ? "«" + c.name + "» добавлен в избранное" : "«" + c.name + "» убран из избранного");
@@ -888,11 +952,23 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             Ui.toast(this, "В избранное можно добавить категорию из плейлиста");
             return;
         }
-        boolean on = st.toggleFavGroup(id);
         String t = Channel.groupTitle(id);
-        Ui.toast(this, on ? "Категория «" + t + "» добавлена в избранное" : "Категория «" + t + "» убрана из избранного");
-        buildGroups();
-        focusGroupId(id);
+        boolean fav = st.isFavGroup(id);
+        new AlertDialog.Builder(this).setTitle(t).setItems(new String[]{
+                fav ? "Убрать из «Моё»" : "Добавить в «Моё»", "Скрыть категорию"}, (d, w) -> {
+            if (w == 0) {
+                boolean on = st.toggleFavGroup(id);
+                Ui.toast(this, on ? "Категория «" + t + "» добавлена в «Моё»" : "Категория «" + t + "» убрана из «Моё»");
+                buildGroups();
+                focusGroupId(id);
+            } else {
+                st.setHiddenGroup(id, true);
+                if (curGroup.equals(id)) curGroup = G_ALL;
+                Ui.toast(this, "Категория «" + t + "» скрыта. Вернуть: Настройки → «Скрытые каналы и категории»");
+                render();
+                focusGroupId(curGroup);
+            }
+        }).show();
     }
 
     private void addSource() {
@@ -930,36 +1006,48 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             pickSource();
             return;
         }
-        String[] labels = new String[groups.size()];
+        final List<Group> gs = new ArrayList<>();
+        for (Group g : groups) if (!g.header()) gs.add(g);
+        String[] labels = new String[gs.size()];
         int sel = 0;
-        for (int i = 0; i < groups.size(); i++) {
-            Group g = groups.get(i);
+        for (int i = 0; i < gs.size(); i++) {
+            Group g = gs.get(i);
             labels[i] = g.title + "  (" + g.count + ")";
             if (g.id.equals(curGroup)) sel = i;
         }
         AlertDialog d = new AlertDialog.Builder(this).setTitle(s.title()).setSingleChoiceItems(labels, sel, (dd, w) -> {
             dd.dismiss();
-            selectGroup(groups.get(w).id, true);
+            selectGroup(gs.get(w).id, true);
         }).create();
         d.show();
-        // Долгое нажатие на категорию — в избранное или из избранного.
+        // Долгое нажатие на категорию — избранное или скрыть, на папке — переименовать или удалить.
         d.getListView().setOnItemLongClickListener((parent, v, w, id) -> {
-            if (w < 0 || w >= groups.size()) return false;
-            String gid = groups.get(w).id;
-            if (gid.startsWith(G_FOLDER)) {
-                d.dismiss();
-                manageFolder(gid);
-                return true;
-            }
-            if (gid.startsWith("\u0001")) return false;
+            if (w < 0 || w >= gs.size()) return false;
+            String gid = gs.get(w).id;
+            if (gid.startsWith("\u0001") && !gid.startsWith(G_FOLDER)) return false;
             d.dismiss();
             toggleFavGroup(gid);
-            pickGroup();
             return true;
         });
     }
 
+    /** Настройки под PIN-кодом (если включено): код спрашивается один раз до выхода из приложения. */
     private void menu() {
+        if (!st.settingsPin() || st.settingsOpen || !st.hasPin()) {
+            settings();
+            return;
+        }
+        askPin("PIN-код для настроек", pin -> {
+            if (!st.checkPin(pin)) {
+                Ui.toast(this, "Неверный PIN-код");
+                return;
+            }
+            st.settingsOpen = true;
+            settings();
+        });
+    }
+
+    private void settings() {
         List<String> items = new ArrayList<>();
         List<Runnable> acts = new ArrayList<>();
         Source s = st.current();
@@ -980,6 +1068,16 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
                 });
             }
         }
+        if (!st.visible().isEmpty()) {
+            items.add("Телепрограмма всех каналов");
+            acts.add(this::openGuide);
+            items.add("Поиск передачи…");
+            acts.add(() -> askText("Название передачи", "", this::searchProgs));
+        }
+        if (!st.hiddenCh.isEmpty() || !st.hiddenGroups.isEmpty()) {
+            items.add("Скрытые каналы и категории…");
+            acts.add(this::manageHidden);
+        }
         items.add(st.preview() ? "Окно предпросмотра: выключить" : "Окно предпросмотра: включить");
         acts.add(() -> {
             st.setPreview(!st.preview());
@@ -991,10 +1089,14 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             items.add(st.showAdult ? "Скрыть каналы 18+" : "Показать каналы 18+");
             acts.add(this::toggleAdult);
         }
+        items.add(st.settingsPin() ? "PIN-код на настройки: выключить" : "PIN-код на настройки: включить");
+        acts.add(this::toggleSettingsPin);
         if (st.hasPin()) {
             items.add("Изменить PIN-код");
             acts.add(this::changePin);
         }
+        items.add("Резервная копия настроек…");
+        acts.add(() -> Backup.menu(this));
         items.add(st.splash() ? "Заставка при запуске: выключить" : "Заставка при запуске: включить");
         acts.add(() -> st.setSplash(!st.splash()));
         boolean auto = getSharedPreferences("argeda", MODE_PRIVATE).getBoolean("autostart", false);
@@ -1010,6 +1112,132 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         acts.add(this::about);
         new AlertDialog.Builder(this).setTitle("Настройки")
                 .setItems(items.toArray(new String[0]), (d, w) -> acts.get(w).run()).show();
+    }
+
+    /** Сетка телепрограммы по каналам открытого списка. */
+    private void openGuide() {
+        List<Channel> l = ca.items();
+        GuideActivity.list = new ArrayList<>(l.isEmpty() ? st.visible() : l);
+        GuideActivity.title = l.isEmpty() ? "Все каналы" : search.length() > 0 ? "Поиск" : titleOf(curGroup);
+        if (!st.hasEpg()) Ui.toast(this, st.epgLoading() ? "Телепрограмма ещё загружается" : "Телепрограммы пока нет");
+        startActivity(new Intent(this, GuideActivity.class));
+    }
+
+    /** Поиск по названиям передач во всей телепрограмме: от архива до будущих дней. */
+    private void searchProgs(String query) {
+        String q = norm(query);
+        if (q.length() < 2) {
+            Ui.toast(this, "Введите хотя бы 2 буквы");
+            return;
+        }
+        if (!st.hasEpg()) {
+            Ui.toast(this, st.epgLoading() ? "Телепрограмма ещё загружается, попробуйте через минуту" : "Телепрограммы нет — искать негде");
+            return;
+        }
+        long now = System.currentTimeMillis();
+        final List<Channel> chs = new ArrayList<>();
+        final List<Epg.Prog> ps = new ArrayList<>();
+        for (Channel c : st.visible()) {
+            if (c.progs == null) continue;
+            for (Epg.Prog p : c.progs) {
+                if (p.stop <= now - 7 * 86_400_000L || !norm(p.title).contains(q)) continue;
+                // В прошлом показываем только то, что есть в архиве.
+                if (p.stop <= now && !Catchup.can(c, st.current(), p.start, now)) continue;
+                chs.add(c);
+                ps.add(p);
+            }
+        }
+        if (ps.isEmpty()) {
+            Ui.toast(this, "Передач «" + query.trim() + "» не нашлось");
+            return;
+        }
+        // Сначала идущие и будущие по времени, затем записи — от свежих к старым.
+        Integer[] idx = new Integer[ps.size()];
+        for (int i = 0; i < idx.length; i++) idx[i] = i;
+        java.util.Arrays.sort(idx, (a, b) -> {
+            Epg.Prog x = ps.get(a), y = ps.get(b);
+            boolean fx = x.stop > now, fy = y.stop > now;
+            if (fx != fy) return fx ? -1 : 1;
+            return fx ? Long.compare(x.start, y.start) : Long.compare(y.start, x.start);
+        });
+        int n = Math.min(idx.length, 150);
+        String[] labels = new String[n];
+        SimpleDateFormat df = new SimpleDateFormat("EEE d MMM, HH:mm", new Locale("ru"));
+        for (int i = 0; i < n; i++) {
+            Epg.Prog p = ps.get(idx[i]);
+            String state = p.start <= now && now < p.stop ? "СЕЙЧАС · " : p.stop <= now ? "ЗАПИСЬ · " : "";
+            labels[i] = state + df.format(new Date(p.start)) + " · " + chs.get(idx[i]).name + "\n" + p.title;
+        }
+        new AlertDialog.Builder(this).setTitle("Найдено: " + ps.size()).setItems(labels, (d, w) -> {
+            Channel c = chs.get(idx[w]);
+            Epg.Prog p = ps.get(idx[w]);
+            long t = System.currentTimeMillis();
+            if (p.start > t) {
+                boolean on = Alerts.toggle(this, c, p);
+                Ui.toast(this, on ? "Напомню в " + hm.format(new Date(p.start - 60_000L)) + ": «" + p.title + "»" : "Напоминание снято");
+                return;
+            }
+            openFromEpg(c, new EpgAdapter.Row(p, Catchup.can(c, st.current(), p.start, t), p.stop > t, false, false));
+        }).show();
+    }
+
+    /** Список скрытых: отмеченные остаются скрытыми, снятые возвращаются. */
+    private void manageHidden() {
+        final List<String> keys = new ArrayList<>(), names = new ArrayList<>();
+        final List<Boolean> isGroup = new ArrayList<>();
+        for (String g : st.hiddenGroups) {
+            keys.add(g);
+            names.add("Категория: " + Channel.groupTitle(g));
+            isGroup.add(true);
+        }
+        for (String k : st.hiddenCh) {
+            Channel c = st.byKey(k);
+            keys.add(k);
+            names.add(c != null ? c.name : k);
+            isGroup.add(false);
+        }
+        final boolean[] on = new boolean[keys.size()];
+        java.util.Arrays.fill(on, true);
+        new AlertDialog.Builder(this).setTitle("Снимите галочку, чтобы вернуть")
+                .setMultiChoiceItems(names.toArray(new String[0]), on, (d, w, c) -> on[w] = c)
+                .setPositiveButton("Готово", (d, w) -> {
+                    int back = 0;
+                    for (int i = 0; i < keys.size(); i++) {
+                        if (on[i]) continue;
+                        back++;
+                        if (isGroup.get(i)) st.setHiddenGroup(keys.get(i), false);
+                        else st.unhide(keys.get(i));
+                    }
+                    if (back > 0) {
+                        Ui.toast(this, "Возвращено: " + back);
+                        render();
+                    }
+                })
+                .setNegativeButton("Отмена", null).show();
+    }
+
+    private void toggleSettingsPin() {
+        if (st.settingsPin()) {
+            st.setSettingsPin(false);
+            Ui.toast(this, "Настройки открываются без PIN-кода");
+            return;
+        }
+        if (st.hasPin()) {
+            st.setSettingsPin(true);
+            st.settingsOpen = true;
+            Ui.toast(this, "Настройки защищены PIN-кодом (тем же, что для 18+)");
+            return;
+        }
+        askPin("Придумайте PIN-код (4–8 цифр)", pin -> {
+            if (pin.length() < 4) {
+                Ui.toast(this, "PIN-код — не меньше 4 цифр");
+                return;
+            }
+            st.setPin(pin);
+            st.setSettingsPin(true);
+            st.settingsOpen = true;
+            Ui.toast(this, "Настройки защищены PIN-кодом");
+        });
     }
 
     private void chooseTheme() {
@@ -1148,8 +1376,9 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
                 "Проигрыватель IPTV для приставок и телефонов. Своих каналов в приложении нет: "
                         + "оно показывает плейлист вашего провайдера (ссылка M3U, Xtream Codes или файл).\n\n"
                         + "Пульт в списке:\n▲ ▼ — выбор канала (он включается в окне справа)\nOK — на весь экран\n"
-                        + "▶ — телепрограмма и записи, ◀ — группы\nДолгое нажатие OK на канале — избранное и свои папки\n"
-                        + "Долгое нажатие OK на категории — категория в избранном (наверху списка), на своей папке — переименовать или удалить\n\n"
+                        + "▶ — телепрограмма и записи, ◀ — группы\nДолгое нажатие OK на канале — избранное, свои папки, порядок в избранном, скрыть канал\n"
+                        + "Долгое нажатие OK на категории — добавить в «Моё» или скрыть, на своей папке — переименовать или удалить\n"
+                        + "Кнопка «Гид» или Настройки → «Телепрограмма всех каналов» — сетка передач, ◀ ▶ — время\n\n"
                         + "Пульт на весь экран:\n▲ ▼ — каналы, OK или ◀ — список, ▶ — сведения и кнопки, цифры — номер канала, 0 — предыдущий канал\n"
                         + "⏯ — пауза; если у канала есть архив, после паузы эфир продолжится с того же места\n"
                         + "В записи: ◀ ▶ — перемотка, «Назад» — вернуться в эфир\n\n"
@@ -1183,10 +1412,26 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
             return groups.size();
         }
 
+        @Override
+        public int getItemViewType(int pos) {
+            return groups.get(pos).header() ? 1 : 0;
+        }
+
         @NonNull
         @Override
         public VH onCreateViewHolder(@NonNull ViewGroup parent, int type) {
             VH h = new VH(LayoutInflater.from(parent.getContext()).inflate(R.layout.item_group, parent, false));
+            if (type == 1) {
+                // Заголовок блока: мелкий приглушённый текст, пульт его пропускает.
+                h.itemView.setFocusable(false);
+                h.itemView.setClickable(false);
+                h.itemView.setBackground(null);
+                h.itemView.setMinimumHeight(Ui.dp(MainActivity.this, 28));
+                h.name.setTextColor(getResources().getColor(R.color.muted));
+                h.name.setTextSize(12);
+                h.name.setLetterSpacing(0.1f);
+                return h;
+            }
             h.itemView.setOnClickListener(v -> {
                 int p = h.getBindingAdapterPosition();
                 if (p >= 0) selectGroup(groups.get(p).id, true);
@@ -1220,7 +1465,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         public void onBindViewHolder(@NonNull VH h, int pos) {
             Group g = groups.get(pos);
             h.name.setText(g.title);
-            h.count.setText(String.valueOf(g.count));
+            h.count.setText(g.header() ? "" : String.valueOf(g.count));
             h.itemView.setSelected(g.id.equals(curGroup));
         }
     }

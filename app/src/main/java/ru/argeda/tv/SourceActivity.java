@@ -272,7 +272,7 @@ public class SourceActivity extends Activity {
                     return;
                 }
         }
-        if (!ep.isEmpty() && !ep.matches("(?i)https?://\\S+")) {
+        if (!ep.isEmpty() && !ep.matches("(?i)https?://\\S+([,;\\s]+https?://\\S+)*")) {
             Ui.toast(this, "Адрес телепрограммы должен начинаться с http:// или https://");
             epg.requestFocus();
             return;
@@ -302,7 +302,7 @@ public class SourceActivity extends Activity {
         } else if (isNew || !oldKey.equals(newKey)) {
             Store.delete(cache); // новая ссылка — скачаем каналы заново
         }
-        if (!ep.equals(oldEpg)) Store.delete(st.epgFile(src));
+        if (!ep.equals(oldEpg)) for (int i = 0; i < 5; i++) Store.delete(st.epgFile(src, i));
         st.putSource(src);
         finish();
     }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Создано tools/icons/gen_icons.py — правьте генератор, а не этот файл. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"
+    android:autoMirrored="false">
+    <path android:pathData="M5,5.5 L19,5.5 Q20.5,5.5 20.5,7 L20.5,17 Q20.5,18.5 19,18.5 L5,18.5 Q3.5,18.5 3.5,17 L3.5,7 Q3.5,5.5 5,5.5 Z"
+        android:strokeColor="@color/text" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M7,12.5 L11,12.5 M13,12.5 L17,12.5 M7,15.5 L15,15.5"
+        android:strokeColor="@color/text" android:strokeWidth="2" android:strokeLineCap="round" android:strokeLineJoin="round" />
+</vector>
