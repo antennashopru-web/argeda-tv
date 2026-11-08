@@ -75,7 +75,7 @@ final class Updater {
             try {
                 JSONObject r = new JSONObject(latest());
                 tag = r.optString("tag_name", "");
-                notes = r.optString("body", "");
+                notes = cleanNotes(r.optString("body", ""));
                 JSONArray as = r.optJSONArray("assets");
                 for (int i = 0; as != null && i < as.length(); i++) {
                     JSONObject x = as.getJSONObject(i);
@@ -148,10 +148,30 @@ final class Updater {
         return l;
     }
 
+    /**
+     * Текст релиза для зрителя: строка «Что нового: …», если она есть, иначе только первая строка.
+     * Без технических подробностей, служебных строк (Co-authored-by, ссылки) и номера PR «(#9)».
+     */
+    static String cleanNotes(String body) {
+        if (body == null) return "";
+        String first = null;
+        for (String line : body.split("\r?\n")) {
+            String t = line.trim();
+            if (t.isEmpty()) continue;
+            String low = t.toLowerCase(java.util.Locale.ROOT);
+            if (low.startsWith("что нового:")) { first = t.substring(11).trim(); break; }
+            boolean service = low.contains("http") || low.contains("-by:") || low.startsWith("claude-");
+            if (first == null && !service) first = t;
+        }
+        if (first == null) return "";
+        first = first.replaceAll("\\s*\\(#\\d+\\)\\s*$", "").trim();
+        return first.length() > 200 ? first.substring(0, 200) + "…" : first;
+    }
+
     private static void offer(Activity a, List<Source> src, long size, String tag, String notes) {
         offered = true;
         String msg = "Доступна новая версия ARGEDA TV " + tag.replaceFirst("^v", "") + ".";
-        if (!notes.isEmpty()) msg += "\n\n" + (notes.length() > 600 ? notes.substring(0, 600) + "…" : notes);
+        if (!notes.isEmpty()) msg += "\n\nЧто нового: " + notes;
         new AlertDialog.Builder(a)
                 .setTitle("Обновление")
                 .setMessage(msg)
