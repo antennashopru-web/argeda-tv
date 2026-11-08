@@ -50,7 +50,7 @@
                     android:layout_gravity="center" android:indeterminateTint="@color/accentLight" android:visibility="gone" />
                 <TextView android:id="@+id/pMsg" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_gravity="center" android:layout_margin="12dp" android:gravity="center"
-                    android:textColor="@color/text" android:textSize="13sp" android:visibility="gone" />
+                    android:textColor="#E6FFFFFF" android:textSize="13sp" android:visibility="gone" />
                 <TextView android:id="@+id/pArch" android:layout_width="wrap_content" android:layout_height="wrap_content"
                     android:layout_gravity="top|start" android:layout_margin="8dp" android:background="@drawable/mark_bg"
                     android:paddingStart="6dp" android:paddingEnd="6dp" android:text="ЗАПИСЬ" android:textColor="@color/text"
