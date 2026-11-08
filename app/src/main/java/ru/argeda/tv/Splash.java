@@ -247,9 +247,31 @@ final class Splash {
         }
     }
 
-    /** Пропуск кнопкой или касанием: звук замолкает, заставка быстро гаснет. */
+    /** Плавно приглушает звук заставки и освобождает плеер (без щелчка и обрыва). */
+    private void fadeVoice(long ms) {
+        final MediaPlayer m = voice;
+        if (m == null) return;
+        voice = null;
+        ValueAnimator va = ValueAnimator.ofFloat(1f, 0f).setDuration(ms);
+        va.addUpdateListener(an -> {
+            float v = (float) an.getAnimatedValue();
+            try {
+                m.setVolume(v * v, v * v);
+            } catch (Exception ignored) {
+            }
+        });
+        va.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationEnd(android.animation.Animator an) {
+                m.release();
+            }
+        });
+        va.start();
+    }
+
+    /** Пропуск кнопкой или касанием: звук быстро затихает, заставка гаснет. */
     void skip() {
-        releaseVoice();
+        fadeVoice(400);
         close(false);
     }
 

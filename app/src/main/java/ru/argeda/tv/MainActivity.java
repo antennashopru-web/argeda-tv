@@ -261,8 +261,14 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         if (b == null && st.splash()) splash = Splash.show(this, this::splashDone);
     }
 
+    /** Звук канала плавно нарастает, пока доигрывает хвост озвучки заставки. */
     private void splashDone() {
-        if (pb.player != null) pb.player.setVolume(1f);
+        android.animation.ValueAnimator va = android.animation.ValueAnimator.ofFloat(0f, 1f).setDuration(1800);
+        va.setStartDelay(300);
+        va.addUpdateListener(an -> {
+            if (pb.player != null) pb.player.setVolume((float) an.getAnimatedValue());
+        });
+        va.start();
     }
 
     @Override
