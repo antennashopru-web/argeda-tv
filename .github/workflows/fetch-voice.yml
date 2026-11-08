@@ -1,0 +1,33 @@
+# Временный: забирает варианты голоса и мощных звуков из ElevenLabs (из облачной среды хост недоступен).
+name: Звук заставки
+on:
+  push:
+    branches: ['claude/project-thread-awe1ca']
+    paths: ['.github/workflows/fetch-voice.yml']
+permissions:
+  contents: write
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          mkdir -p tools/sound/v
+          cd tools/sound/v
+          curl -fsSL -o voice_1.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/oQVFdHe8DxZ5vFAHYevX/hsRLap0J2gYyjh5u1ajc/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=x-nVSwWRet3yLnf1BUqwMZBpTck="
+          curl -fsSL -o voice_2.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/vmOYdpDq7gI7fukFcA0C/zFHoQ3iAqRH0ZhKXjOGf/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=1NEmkpJCxmJPxAMwxVGQ1Bq0nUc="
+          curl -fsSL -o voice_3.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/fpt20eAgrrX8Dka0VEbT/as2pa5gNMsTeNDRPPo33/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=RqFDVk6wlZTKeB6PY8reXeKu3PE="
+          curl -fsSL -o voice_4.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/BZmBxEkCmbDF0jaH7KHt/gegKbp5yjp4Q61sViSPK/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=aFNqcW7yb8fyHH6vymlqx54qQhU="
+          curl -fsSL -o voice_5.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/jVzcpwIBc0e80I5tzl1L/gA3QAAdrV9G4j3IYhF14/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=YWvElcfaOffnUqa4DlCAwKOX1Wc="
+          curl -fsSL -o fx_1.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/qc6eFGBYeXp8DV7mganC/kijuME84H0jY5toV3UiE/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=irEMvzM244tOQkJmhYBYvfjOS-k="
+          curl -fsSL -o fx_2.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/RICkzBB8FORJvku4VXFw/Q3cB1btpgakMb7wUUDGw/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=ET8nXmERmT36_gFAlXAoHUep0qw="
+          curl -fsSL -o fx_3.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/ih6AOUEzWaCipFvgWdTt/AHKAC3whpxDFsSRKuRZk/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=iG10wuKcGlyTLhN5LubB2jNSGLs="
+          curl -fsSL -o fx_4.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/fSE0Wg0jg9mHfAaGJ9Bu/sn6JbTe3RuSdnXFN8Ct6/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=tX5x_reX1AjB5oGPgucdgqIh91o="
+          curl -fsSL -o fx_5.mp3 "https://elevenlabsusercontent.com/database/workspace/353af677959448bd9d9390943da9a8ba/content_generation/oswrU6j2xs8zIiLBkLPu/tUephKxTfXqJ4x2zxXVj/content.mp3?Expires=1794139200&KeyName=assets-cdn-key-1&Signature=IOzQ3pF6D_E843FQngy6cQro85M="
+          ls -la
+          cd ../../..
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/sound/v
+          git commit -m "Варианты голоса и мощных звуков (ElevenLabs)"
+          git push
