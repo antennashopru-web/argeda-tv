@@ -170,17 +170,24 @@ final class Updater {
                 if (r == null) throw new IOException("нет переадресации");
                 return r;
             });
+            // Зеркала (особенно jsDelivr) могут несколько минут отдавать прошлую версию. Поэтому после
+            // первого удачного ответа ждём остальные ещё до 4 с и берём самую новую версию из всех.
             long until = System.currentTimeMillis() + 20000;
+            Release best = null;
             for (int i = 0; i < 4; i++) {
                 long left = until - System.currentTimeMillis();
                 java.util.concurrent.Future<Release> f = left > 0 ? cs.poll(left, java.util.concurrent.TimeUnit.MILLISECONDS) : null;
                 if (f == null) break;
                 try {
                     Release r = f.get();
-                    if (r != null && r.code > 0) return r;
+                    if (r != null && r.code > 0) {
+                        if (best == null) until = Math.min(until, System.currentTimeMillis() + 4000);
+                        if (best == null || r.code > best.code) best = r;
+                    }
                 } catch (java.util.concurrent.ExecutionException ignored) {
                 }
             }
+            if (best != null) return best;
             Exception e = apiErr.get();
             if (e instanceof Net.HttpError) throw e;
             throw new IOException("Нет связи с сервером обновлений. Проверьте интернет и попробуйте позже");
