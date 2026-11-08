@@ -13,6 +13,10 @@ import android.view.GestureDetector;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.inputmethod.InputMethodManager;
+import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -53,6 +57,10 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     private ChannelAdapter sa;
     private EpgAdapter ea;
     private List<Channel> list;
+    /** Что сейчас показано в боковом списке: категория или результаты поиска (может отличаться от list). */
+    private List<Channel> browse;
+    private String browseTitle = "";
+    private EditText sideSearch;
     private int index, fit, eatUp = -1;
     private boolean tv;
     /** Фокус на кнопках панели сведений (◀ ▶ OK — по кнопкам). Иначе пульт управляет каналами и перемоткой. */
@@ -107,6 +115,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         seek = findViewById(R.id.seek);
         sideTitle = findViewById(R.id.sideTitle);
         sideList = findViewById(R.id.sideList);
+        sideSearch = findViewById(R.id.sideSearch);
         epgTitle = findViewById(R.id.epgTitle);
         epgSideEmpty = findViewById(R.id.epgSideEmpty);
         epgSideList = findViewById(R.id.epgSideList);
@@ -150,8 +159,16 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         sa = new ChannelAdapter(st, new ChannelAdapter.Listener() {
             @Override
             public void click(int pos) {
+                if (browse == null || pos < 0 || pos >= browse.size()) return;
                 hideSide();
-                if (pos != index || pb.isArchive()) {
+                if (browse != list) {
+                    // Выбрали канал из другой категории или из поиска: дальше ▲▼ листают уже этот список.
+                    list = browse;
+                    st.playList = list;
+                    st.playTitle = browseTitle;
+                    index = pos;
+                    switchTo(true);
+                } else if (pos != index || pb.isArchive()) {
                     index = pos;
                     switchTo(true);
                 }
@@ -159,7 +176,8 @@ public class PlayerActivity extends Activity implements Playback.Listener {
 
             @Override
             public void longClick(int pos) {
-                Channel c = list.get(pos);
+                if (browse == null || pos < 0 || pos >= browse.size()) return;
+                Channel c = browse.get(pos);
                 boolean on = st.toggleFav(c);
                 Ui.toast(PlayerActivity.this, on ? "«" + c.name + "» добавлен в избранное" : "«" + c.name + "» убран из избранного");
                 sa.notifyItemChanged(pos);
@@ -204,6 +222,29 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         epgSideList.setItemAnimator(null);
 
         bList.setOnClickListener(v -> showSide());
+        sideTitle.setOnClickListener(v -> pickGroup());
+        findViewById(R.id.sideSearchBtn).setOnClickListener(v -> toggleSearch());
+        sideSearch.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
+
+            @Override
+            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+
+            @Override
+            public void afterTextChanged(Editable e) {
+                keepSide();
+                ui.removeCallbacks(searchRun);
+                ui.postDelayed(searchRun, 250);
+            }
+        });
+        sideSearch.setOnEditorActionListener((v, a, e) -> {
+            ui.removeCallbacks(searchRun);
+            searchRun.run();
+            hideKeyboard();
+            if (browse != null && !browse.isEmpty()) focusAt(sideList, 0, 10);
+            return true;
+        });
         findViewById(R.id.bEpg).setOnClickListener(v -> showEpg());
         bLive.setOnClickListener(v -> toLive());
         bFav.setOnClickListener(v -> {
@@ -743,21 +784,95 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         info.setVisibility(View.GONE);
         btns = false;
         hideEpg();
-        sideTitle.setText(st.playTitle + "  ·  " + list.size());
+        ui.removeCallbacks(searchRun);
+        sideSearch.setText("");
+        sideSearch.setVisibility(View.GONE);
         sa.current = list.get(index);
-        sa.set(list);
+        setBrowse(list, st.playTitle);
         side.setVisibility(View.VISIBLE);
         ((LinearLayoutManager) sideList.getLayoutManager()).scrollToPositionWithOffset(index, Ui.dp(this, 140));
         focusAt(sideList, index, 10);
-        ui.removeCallbacks(hideSideRun);
-        ui.postDelayed(hideSideRun, 20_000);
+        keepSide();
     }
 
     private void hideSide() {
         boolean had = side.hasFocus();
+        hideKeyboard();
         side.setVisibility(View.GONE);
         ui.removeCallbacks(hideSideRun);
+        ui.removeCallbacks(searchRun);
         if (had) parkFocus();
+    }
+
+    /** Список не прячется сам, пока им пользуются (выбор категории, набор поиска). */
+    private void keepSide() {
+        ui.removeCallbacks(hideSideRun);
+        ui.postDelayed(hideSideRun, sideSearch.getVisibility() == View.VISIBLE ? 60_000 : 20_000);
+    }
+
+    @SuppressWarnings("NotifyDataSetChanged")
+    private void setBrowse(List<Channel> l, String title) {
+        browse = l;
+        browseTitle = title;
+        sideTitle.setText(title + "  ·  " + l.size() + "  ▾");
+        sa.set(l);
+        sideList.scrollToPosition(0);
+    }
+
+    /** Выбор категории прямо в плеере — как на главном экране. */
+    private void pickGroup() {
+        keepSide();
+        List<Channel> vis = st.visible();
+        final List<Groups.G> gs = Groups.list(st, vis);
+        String[] labels = new String[gs.size()];
+        int sel = -1;
+        for (int i = 0; i < gs.size(); i++) {
+            Groups.G g = gs.get(i);
+            labels[i] = g.title + "  (" + g.count + ")";
+            if (sel < 0 && Groups.title(g.id).equals(browseTitle)) sel = i;
+        }
+        new AlertDialog.Builder(this).setTitle("Категории").setSingleChoiceItems(labels, sel, (d, w) -> {
+            d.dismiss();
+            Groups.G g = gs.get(w);
+            ui.removeCallbacks(searchRun);
+            sideSearch.setText("");
+            sideSearch.setVisibility(View.GONE);
+            hideKeyboard();
+            List<Channel> l = Groups.channels(st, g.id, st.visible());
+            setBrowse(l, Groups.title(g.id));
+            int at = Math.max(0, l.indexOf(list.get(index)));
+            ((LinearLayoutManager) sideList.getLayoutManager()).scrollToPositionWithOffset(at, Ui.dp(this, 140));
+            if (!l.isEmpty()) focusAt(sideList, at, 10);
+            keepSide();
+        }).show();
+    }
+
+    private void toggleSearch() {
+        if (sideSearch.getVisibility() == View.VISIBLE && sideSearch.length() == 0) {
+            sideSearch.setVisibility(View.GONE);
+            hideKeyboard();
+            keepSide();
+            return;
+        }
+        sideSearch.setVisibility(View.VISIBLE);
+        sideSearch.requestFocus();
+        InputMethodManager im = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (im != null) im.showSoftInput(sideSearch, InputMethodManager.SHOW_IMPLICIT);
+        keepSide();
+    }
+
+    private final Runnable searchRun = () -> {
+        if (side.getVisibility() != View.VISIBLE) return;
+        String q = sideSearch.getText().toString().trim();
+        if (q.isEmpty()) {
+            setBrowse(list, st.playTitle);
+            ((LinearLayoutManager) sideList.getLayoutManager()).scrollToPositionWithOffset(index, Ui.dp(this, 140));
+        } else setBrowse(Groups.search(q, st.visible()), "Поиск: " + q);
+    };
+
+    private void hideKeyboard() {
+        InputMethodManager im = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+        if (im != null) im.hideSoftInputFromWindow(sideSearch.getWindowToken(), 0);
     }
 
     private void showEpg() {
