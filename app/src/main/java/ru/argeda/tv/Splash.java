@@ -48,7 +48,7 @@ final class Splash {
 
     /** Момент удара в звуке, мс (совпадает с HIT в tools/sound/mix.py). */
     static final long HIT = 1300;
-    private static final long HOLD = 3900, WARP = 550, SKIP = 250;
+    private static final long HOLD = 4100, WARP = 550, SKIP = 250;
     private static final int[] SPARK = {0xFFE30613, 0xFF0047BB, 0xFFF28C00, 0xFFA855F7, 0xFFC4B5FD, Color.WHITE};
 
     private final Activity a;

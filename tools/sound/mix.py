@@ -5,6 +5,8 @@
 Запуск из корня репозитория:
   python3 tools/sound/mix.py N out.mp3        — собрать вариант N в файл
   python3 tools/sound/mix.py N                — собрать вариант N в res/raw/argeda_tv.mp3
+  python3 tools/sound/mix.py N out.mp3 голос.mp3 — удар варианта N с другим голосом
+Сейчас в приложении: удар 3 + голос «Библия — Бог» (god_1.mp3, ElevenLabs eleven_v3, [торжественно, мощно, с величием]).
 """
 import subprocess
 import sys
@@ -42,8 +44,9 @@ def place(buf, sig, at, gain=1.0):
     buf[i:j] += gain * sig[: j - i]
 
 
-def build(n, out):
-    fx, voice = trim(load(f"tools/sound/v/fx_{n}.mp3")), trim(load(f"tools/sound/v/voice_{n}.mp3"))
+def build(n, out, voice_path=None):
+    fx = trim(load(f"tools/sound/v/fx_{n}.mp3"))
+    voice = trim(load(voice_path or f"tools/sound/v/voice_{n}.mp3"))
     voice /= np.abs(voice).max() + 1e-9
     fx /= np.abs(fx).max() + 1e-9
     total = VOICE_AT + len(voice) / SR + 0.3
@@ -76,4 +79,5 @@ def build(n, out):
 
 
 if __name__ == "__main__":
-    build(int(sys.argv[1]), sys.argv[2] if len(sys.argv) > 2 else "app/src/main/res/raw/argeda_tv.mp3")
+    build(int(sys.argv[1]), sys.argv[2] if len(sys.argv) > 2 else "app/src/main/res/raw/argeda_tv.mp3",
+          sys.argv[3] if len(sys.argv) > 3 else None)
