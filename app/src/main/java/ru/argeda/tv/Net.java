@@ -36,6 +36,11 @@ final class Net {
     private Net() {}
 
     static HttpURLConnection open(String url, String ua) throws IOException {
+        return open(url, ua, null);
+    }
+
+    /** accept — заголовок Accept (null — не отправлять). */
+    static HttpURLConnection open(String url, String ua, String accept) throws IOException {
         String u = url.trim();
         for (int hop = 0; hop < 6; hop++) {
             URL x = new URL(u);
@@ -47,6 +52,8 @@ final class Net {
             c.setInstanceFollowRedirects(false);
             c.setRequestProperty("User-Agent", ua == null || ua.isEmpty() ? UA : ua);
             c.setRequestProperty("Accept-Encoding", "gzip");
+            // Accept нужен только самому API; на переадресованный адрес хранилища его не шлём.
+            if (accept != null && hop == 0) c.setRequestProperty("Accept", accept);
             int code = c.getResponseCode();
             if (code >= 300 && code < 400 && code != 304) {
                 String loc = c.getHeaderField("Location");
@@ -84,7 +91,11 @@ final class Net {
     }
 
     static void download(String url, String ua, File out, long max) throws IOException {
-        HttpURLConnection c = open(url, ua);
+        download(url, ua, null, out, max);
+    }
+
+    static void download(String url, String ua, String accept, File out, long max) throws IOException {
+        HttpURLConnection c = open(url, ua, accept);
         try (InputStream in = body(c); OutputStream o = new FileOutputStream(out)) {
             byte[] buf = new byte[65536];
             long total = 0;

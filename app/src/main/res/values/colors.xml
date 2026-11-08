@@ -22,7 +22,8 @@
     <color name="border2">#291B1033</color>
     <color name="sideBg">#F7FFFFFF</color>
     <color name="chBg">#FFFFFFFF</color>
-    <color name="logoBg">#EFEBF8</color>
+    <!-- Тёмная подложка: белые/прозрачные логотипы каналов (Первый, НТВ, РЕН ТВ, ОТР) иначе не видны на светлом фоне -->
+    <color name="logoBg">#241B3D</color>
     <color name="tabText">#4B4370</color>
     <color name="previewBorder">#4D7C3AED</color>
 </resources>

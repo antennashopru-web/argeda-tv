@@ -73,9 +73,29 @@ jobs:
         run: |
           CODE=$((100 + VERSION_CODE))
           cp app/build/outputs/apk/release/app-release.apk "argeda-tv-$CODE.apk"
+          # Зрителю — одна понятная строка: «Что нового: …» из описания PR, иначе заголовок без «(#N)».
+          MSG="$(git log -1 --pretty=%B)"
+          NOTES="$(printf '%s\n' "$MSG" | sed -nE 's/^[[:space:]]*(Что|что) нового:[[:space:]]*//p' | head -n1)"
+          [ -n "$NOTES" ] || NOTES="$(git log -1 --pretty=%s | sed -E 's/[[:space:]]*\(#[0-9]+\)[[:space:]]*$//')"
           gh release create "v$VERSION_NAME" "argeda-tv-$CODE.apk" \
             --title "ARGEDA TV $VERSION_NAME" \
-            --notes "$(git log -1 --pretty=%B)"
+            --notes "$NOTES"
+
+      # Запасная копия APK в ветке update (raw.githubusercontent.com): приложение качает её,
+      # если сервер релизов GitHub отвечает ошибкой. В ветке всегда один коммит с одним файлом.
+      - name: Запасная копия для автообновления
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED == '1'
+        continue-on-error: true
+        run: |
+          CODE=$((100 + VERSION_CODE))
+          D="$RUNNER_TEMP/update"
+          mkdir -p "$D" && cp "argeda-tv-$CODE.apk" "$D/"
+          cd "$D"
+          git init -q -b update
+          git add "argeda-tv-$CODE.apk"
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "ARGEDA TV $VERSION_NAME (код $CODE)"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" update
 
       - name: Нет ключа подписи
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.SIGNED != '1'
