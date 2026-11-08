@@ -69,6 +69,18 @@ final class Store {
     private final Set<String> fav = new HashSet<>();
     /** Избранные категории (группы плейлиста) в порядке добавления: их показывают наверху списка групп. */
     final List<String> favGroups = new ArrayList<>();
+
+    /** Своя папка в избранном («Кино», «Детям»…): название и каналы в порядке добавления. */
+    static final class Folder {
+        String name;
+        final List<String> keys = new ArrayList<>();
+
+        Folder(String name) {
+            this.name = name;
+        }
+    }
+
+    final List<Folder> folders = new ArrayList<>();
     final List<String> recent = new ArrayList<>();
     String lastKey;
     /** Каналы 18+ открываются PIN-кодом до выхода из приложения. */
@@ -110,6 +122,17 @@ final class Store {
         } catch (JSONException ignored) {
         }
         lastKey = p.getString("last", "");
+        try {
+            JSONArray a = new JSONArray(p.getString("folders", "[]"));
+            for (int i = 0; i < a.length(); i++) {
+                org.json.JSONObject o = a.getJSONObject(i);
+                Folder f = new Folder(o.optString("n"));
+                JSONArray k = o.optJSONArray("k");
+                if (k != null) for (int j = 0; j < k.length(); j++) f.keys.add(k.getString(j));
+                if (!f.name.isEmpty()) folders.add(f);
+            }
+        } catch (JSONException ignored) {
+        }
     }
 
     // ---------- Источники ----------
@@ -386,6 +409,58 @@ final class Store {
         if (on) favGroups.add(g);
         p.edit().putString("favg", new JSONArray(favGroups).toString()).apply();
         return on;
+    }
+
+    // ---------- Папки избранного ----------
+
+    Folder folder(String name) {
+        for (Folder f : folders) if (f.name.equalsIgnoreCase(name)) return f;
+        return null;
+    }
+
+    /** Создаёт папку; null — если такая уже есть или название пустое. */
+    Folder addFolder(String name) {
+        name = name.trim();
+        if (name.isEmpty() || folder(name) != null) return null;
+        Folder f = new Folder(name);
+        folders.add(f);
+        saveFolders();
+        return f;
+    }
+
+    boolean renameFolder(Folder f, String name) {
+        name = name.trim();
+        Folder same = folder(name);
+        if (name.isEmpty() || (same != null && same != f)) return false;
+        f.name = name;
+        saveFolders();
+        return true;
+    }
+
+    void removeFolder(Folder f) {
+        folders.remove(f);
+        saveFolders();
+    }
+
+    boolean inFolder(Folder f, Channel c) {
+        return f.keys.contains(c.key());
+    }
+
+    boolean toggleInFolder(Folder f, Channel c) {
+        String k = c.key();
+        boolean on = !f.keys.remove(k);
+        if (on) f.keys.add(k);
+        saveFolders();
+        return on;
+    }
+
+    private void saveFolders() {
+        JSONArray a = new JSONArray();
+        try {
+            for (Folder f : folders) a.put(new org.json.JSONObject().put("n", f.name).put("k", new JSONArray(f.keys)));
+        } catch (JSONException ignored) {
+        }
+        p.edit().putString("folders", a.toString()).apply();
     }
 
     void played(Channel c) {
