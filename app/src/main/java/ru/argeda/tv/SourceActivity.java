@@ -46,6 +46,7 @@ public class SourceActivity extends Activity {
     protected void onCreate(Bundle b) {
         super.onCreate(b);
         setContentView(R.layout.activity_source);
+        Ui.tvSafeArea(this);
         st = Store.get(this);
         name = findViewById(R.id.name);
         url = findViewById(R.id.url);

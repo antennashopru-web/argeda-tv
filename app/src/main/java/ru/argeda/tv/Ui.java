@@ -26,6 +26,22 @@ final class Ui {
                 || !pm.hasSystemFeature(PackageManager.FEATURE_TOUCHSCREEN);
     }
 
+    /**
+     * Безопасная зона на телевизоре: многие ТВ обрезают края картинки (overscan), поэтому
+     * интерфейс отступает от краёв экрана. Фон корневого вида остаётся на весь экран.
+     * Вместе с собственными отступами разметки получается около 5% по бокам, как советует Google.
+     */
+    static void tvSafeArea(android.app.Activity a) {
+        if (!isTv(a)) return;
+        android.view.ViewGroup content = a.findViewById(android.R.id.content);
+        if (content == null || content.getChildCount() == 0) return;
+        android.view.View root = content.getChildAt(0);
+        root.setFitsSystemWindows(false); // на ТВ нет системных панелей, а их отступы затёрли бы наши
+        int h = dp(a, 32), v = dp(a, 20);
+        root.setPadding(root.getPaddingLeft() + h, root.getPaddingTop() + v,
+                root.getPaddingRight() + h, root.getPaddingBottom() + v);
+    }
+
     /** Не даём экрану погаснуть, пока идёт просмотр. */
     static void keepScreenOn(android.app.Activity a, boolean on) {
         if (on) a.getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
