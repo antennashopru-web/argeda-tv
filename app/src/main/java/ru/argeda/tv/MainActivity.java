@@ -284,6 +284,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     @Override
     protected void onStart() {
         super.onStart();
+        Alerts.attach(this);
         pb.acquire();
         preview.setPlayer(pb.player);
         if (splash != null && splash.showing() && pb.player != null) pb.player.setVolume(0f);
@@ -295,6 +296,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     @Override
     protected void onStop() {
         super.onStop();
+        Alerts.detach(this);
         if (splash != null) splash.cancel();
         splash = null;
         ui.removeCallbacks(previewRun);
@@ -647,6 +649,7 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         long now = System.currentTimeMillis();
         List<EpgAdapter.Row> rows = EpgAdapter.build(c, st.current(), now);
         ea.playing = playingStart(c);
+        ea.channel = c;
         ea.set(rows);
         if (rows.isEmpty()) {
             Source s = st.current();
@@ -728,7 +731,10 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
     private void openFromEpg(Channel c, EpgAdapter.Row r) {
         long now = System.currentTimeMillis();
         if (r.future) {
-            Ui.toast(this, "Передача начнётся в " + hm.format(new Date(r.p.start)));
+            boolean on = Alerts.toggle(this, c, r.p);
+            Ui.toast(this, on ? "Напомню в " + hm.format(new Date(r.p.start - 60_000L)) + ", за минуту до начала" : "Напоминание снято");
+            int i = ea.rows().indexOf(r);
+            if (i >= 0) ea.notifyItemChanged(i);
             return;
         }
         if (r.now) {
@@ -991,6 +997,11 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         }
         items.add(st.splash() ? "Заставка при запуске: выключить" : "Заставка при запуске: включить");
         acts.add(() -> st.setSplash(!st.splash()));
+        boolean auto = getSharedPreferences("argeda", MODE_PRIVATE).getBoolean("autostart", false);
+        items.add(auto ? "Запуск при включении приставки: выключить" : "Запуск при включении приставки: включить");
+        acts.add(() -> setAutostart(!auto));
+        items.add("Таймер сна: " + Alerts.sleepLabel());
+        acts.add(() -> Alerts.nextSleep(this));
         items.add("Тема: " + Themes.NAMES[Themes.get(this)]);
         acts.add(this::chooseTheme);
         items.add("Проверить обновления");
@@ -1107,6 +1118,26 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
         e.requestFocus();
     }
 
+    /** Автозапуск. На Android 10+ системе нужно разрешение «Поверх других окон», иначе окно из фона не откроется. */
+    private void setAutostart(boolean on) {
+        getSharedPreferences("argeda", MODE_PRIVATE).edit().putBoolean("autostart", on).apply();
+        if (!on) {
+            Ui.toast(this, "Автозапуск выключен");
+            return;
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 29 && !android.provider.Settings.canDrawOverlays(this)) {
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:" + getPackageName())));
+                Ui.toast(this, "Разрешите ARGEDA TV «Поверх других окон» — без этого система не даст открыться при включении");
+            } catch (Exception e) {
+                Ui.toast(this, "Автозапуск включён. Если приставка не откроет ARGEDA TV сама, разрешите ей «Поверх других окон» в настройках Android");
+            }
+            return;
+        }
+        Ui.toast(this, "ARGEDA TV будет открываться при включении приставки");
+    }
+
     private void about() {
         String v = "";
         try {
@@ -1119,10 +1150,12 @@ public class MainActivity extends Activity implements Store.Listener, Playback.L
                         + "Пульт в списке:\n▲ ▼ — выбор канала (он включается в окне справа)\nOK — на весь экран\n"
                         + "▶ — телепрограмма и записи, ◀ — группы\nДолгое нажатие OK на канале — избранное и свои папки\n"
                         + "Долгое нажатие OK на категории — категория в избранном (наверху списка), на своей папке — переименовать или удалить\n\n"
-                        + "Пульт на весь экран:\n▲ ▼ — каналы, OK или ◀ — список, ▶ — сведения и кнопки, цифры — номер канала\n"
+                        + "Пульт на весь экран:\n▲ ▼ — каналы, OK или ◀ — список, ▶ — сведения и кнопки, цифры — номер канала, 0 — предыдущий канал\n"
+                        + "⏯ — пауза; если у канала есть архив, после паузы эфир продолжится с того же места\n"
                         + "В записи: ◀ ▶ — перемотка, «Назад» — вернуться в эфир\n\n"
                         + "Телефон: касание канала — в окне, второе касание — на весь экран. "
                         + "На весь экран: свайп вверх/вниз — каналы, в записи свайп влево/вправо — перемотка.\n\n"
+                        + "Будущая передача в телепрограмме: OK — напомнить за минуту до начала (пока приложение открыто).\n\n"
                         + "Ссылки и пароли хранятся только на этом устройстве.")
                 .setPositiveButton("OK", null).show();
     }

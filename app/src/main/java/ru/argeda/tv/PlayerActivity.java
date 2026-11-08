@@ -217,6 +217,13 @@ public class PlayerActivity extends Activity implements Playback.Listener {
             Ui.toast(this, "Формат: " + FIT_NAMES[fit]);
         });
         bAudio.setOnClickListener(v -> pickAudio());
+        TextView bSleep = findViewById(R.id.bSleep);
+        bSleep.setText("Сон: " + Alerts.sleepLabel());
+        bSleep.setOnClickListener(v -> {
+            Alerts.nextSleep(this);
+            bSleep.setText("Сон: " + Alerts.sleepLabel());
+            showInfo(true);
+        });
         TextView bRot = findViewById(R.id.bRot);
         if (!tv) {
             // Телефон и планшет: экран поворачивается за устройством, либо закреплён кнопкой «Поворот».
@@ -281,6 +288,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     @Override
     protected void onStart() {
         super.onStart();
+        Alerts.attach(this);
         if (list == null || list.isEmpty()) return;
         hideSystemUi();
         pb.acquire();
@@ -302,6 +310,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     protected void onStop() {
         super.onStop();
         ui.removeCallbacksAndMessages(null);
+        Alerts.detach(this);
         if (pb == null || list == null || list.isEmpty()) return;
         pb.removeListener(this);
         video.setPlayer(null);
@@ -355,6 +364,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
 
     private void switchTo(boolean now) {
         Channel c = list.get(index);
+        livePausedAt = 0;
         st.playIndex = index;
         st.played(c);
         ui.removeCallbacks(zapRun);
@@ -381,14 +391,60 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         showInfo(false);
     }
 
+    /** Когда поставили на паузу прямой эфир (0 — не на паузе). */
+    private long livePausedAt;
+
     private void togglePause(int k) {
         if (pb.player == null) return;
         boolean play = k == KeyEvent.KEYCODE_MEDIA_PLAY || (k == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE && !pb.player.getPlayWhenReady());
         if (play) {
-            if (!pb.isArchive()) pb.player.seekToDefaultPosition();
+            long at = livePausedAt;
+            livePausedAt = 0;
+            if (!pb.isArchive()) {
+                // Пауза эфира: если у канала есть архив, продолжаем с места паузы, иначе — снова эфир.
+                Channel c = list.get(index);
+                long now = System.currentTimeMillis();
+                if (at > 0 && MainActivity.same(pb.channel, c) && Catchup.can(c, st.current(), at, now)) {
+                    Epg.Prog p = Epg.at(c.progs, at);
+                    pb.playArchive(c, at, p != null ? p.start : at, p != null ? Math.min(p.stop, now) : 0, p != null ? p.title : "");
+                    Ui.toast(this, "С места паузы");
+                    showInfo(false);
+                    return;
+                }
+                pb.player.seekToDefaultPosition();
+            }
             pb.player.play();
-        } else pb.player.pause();
+        } else {
+            if (!pb.isArchive() && pb.player.getPlayWhenReady()) livePausedAt = System.currentTimeMillis();
+            pb.player.pause();
+        }
         showInfo(false);
+    }
+
+    /** Кнопка 0 (или «Предыдущий канал» на пульте): назад к каналу, который смотрели перед этим. */
+    private void prevChannel() {
+        String k = st.recent.size() > 1 ? st.recent.get(1) : null;
+        if (k != null) {
+            for (int i = 0; i < list.size(); i++) {
+                if (list.get(i).key().equals(k)) {
+                    index = i;
+                    switchTo(true);
+                    return;
+                }
+            }
+            List<Channel> vis = st.visible();
+            for (int i = 0; i < vis.size(); i++) {
+                if (vis.get(i).key().equals(k)) {
+                    list = vis;
+                    st.playList = vis;
+                    st.playTitle = "Все каналы";
+                    index = i;
+                    switchTo(true);
+                    return;
+                }
+            }
+        }
+        Ui.toast(this, "Предыдущего канала пока нет");
     }
 
     /** Перемотка записи: нажатия копятся, поток перезапрашивается один раз, когда их отпустили. */
@@ -559,6 +615,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         epgTitle.setText("Телепрограмма  ·  " + c.name);
         List<EpgAdapter.Row> rows = EpgAdapter.build(c, st.current(), System.currentTimeMillis());
         ea.playing = pb.isArchive() ? pb.archStart : 0;
+        ea.channel = c;
         ea.set(rows);
         epgSide.setVisibility(View.VISIBLE);
         if (rows.isEmpty()) {
@@ -590,7 +647,7 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     private void fromEpg(EpgAdapter.Row r) {
         Channel c = list.get(index);
         if (r.future) {
-            Ui.toast(this, "Передача начнётся в " + hm.format(new Date(r.p.start)));
+            remind(c, r);
             return;
         }
         if (r.now && pb.isArchive()) {
@@ -608,6 +665,37 @@ public class PlayerActivity extends Activity implements Playback.Listener {
         showInfo(false);
     }
 
+    /** Будущая передача: OK ставит или снимает напоминание. */
+    private void remind(Channel c, EpgAdapter.Row r) {
+        boolean on = Alerts.toggle(this, c, r.p);
+        Ui.toast(this, on ? "Напомню в " + hm.format(new Date(r.p.start - 60_000L)) + ", за минуту до начала" : "Напоминание снято");
+        int i = ea.rows().indexOf(r);
+        if (i >= 0) ea.notifyItemChanged(i);
+    }
+
+    /** Напоминание: «Смотреть» — включить канал прямо здесь. */
+    void openKey(String key) {
+        for (int i = 0; i < list.size(); i++) {
+            if (list.get(i).key().equals(key)) {
+                index = i;
+                switchTo(true);
+                return;
+            }
+        }
+        List<Channel> vis = st.visible();
+        for (int i = 0; i < vis.size(); i++) {
+            if (vis.get(i).key().equals(key)) {
+                list = vis;
+                st.playList = vis;
+                st.playTitle = "Все каналы";
+                index = i;
+                switchTo(true);
+                return;
+            }
+        }
+        Ui.toast(this, "Этого канала больше нет в плейлисте");
+    }
+
     private void focusAt(RecyclerView rv, int pos, int tries) {
         RecyclerView.ViewHolder vh = rv.findViewHolderForAdapterPosition(pos);
         if (vh != null) vh.itemView.requestFocus();
@@ -617,6 +705,10 @@ public class PlayerActivity extends Activity implements Playback.Listener {
     // ---------- Номер канала цифрами ----------
 
     private void digit(int d) {
+        if (d == 0 && digitBuf.isEmpty()) {
+            prevChannel(); // номера каналов не начинаются с 0
+            return;
+        }
         if (digitBuf.length() >= 5) digitBuf = "";
         digitBuf += d;
         digits.setText(digitBuf);
@@ -729,6 +821,9 @@ public class PlayerActivity extends Activity implements Playback.Listener {
                 return true;
             case KeyEvent.KEYCODE_MEDIA_REWIND:
                 seekBy(-1, repeat);
+                return true;
+            case KeyEvent.KEYCODE_LAST_CHANNEL:
+                prevChannel();
                 return true;
             case KeyEvent.KEYCODE_GUIDE:
                 if (epgOn) hideEpg();
