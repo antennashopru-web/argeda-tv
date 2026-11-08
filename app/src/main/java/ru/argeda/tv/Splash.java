@@ -84,6 +84,7 @@ final class Splash {
         root.setBackgroundColor(0xFF07050F);
         root.setClickable(true);
         root.setOnClickListener(v -> skip());
+        root.setFocusable(false); // касание пропускает заставку, но фокус пульта остаётся на списке
 
         int size = dp(150);
         fx = new Fx(a, size);

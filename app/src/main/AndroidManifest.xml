@@ -23,7 +23,7 @@
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="keyboard|keyboardHidden|navigation|screenLayout|smallestScreenSize|uiMode"
+            android:configChanges="keyboard|keyboardHidden|navigation|screenLayout|smallestScreenSize"
             android:exported="true"
             android:windowSoftInputMode="adjustPan">
             <intent-filter>
@@ -42,7 +42,7 @@
 
         <activity
             android:name=".SourceActivity"
-            android:configChanges="keyboard|keyboardHidden|navigation|uiMode"
+            android:configChanges="keyboard|keyboardHidden|navigation"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
