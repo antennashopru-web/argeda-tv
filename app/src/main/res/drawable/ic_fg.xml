@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Передний слой значка: вариант 2, сгенерирован в Kie AI (design/kie-icons/variant-2.png) -->
+<!-- Передний слой значка: картинка 1, вариант 1 (выбран ARTAK) -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
     android:src="@drawable/ic_fg_art"
     android:filter="true"
