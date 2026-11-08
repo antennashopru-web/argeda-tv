@@ -188,7 +188,13 @@ final class Splash {
     private void remove() {
         if (root == null) return;
         ViewGroup p = (ViewGroup) root.getParent();
-        if (p != null) p.removeView(root);
+        if (p != null) {
+            p.removeView(root);
+            // Некоторые ТВ-приставки после снятия полноэкранного слоя перерисовывают не весь экран.
+            View top = p.getRootView();
+            top.invalidate();
+            top.requestLayout();
+        }
         root = null;
     }
 }
