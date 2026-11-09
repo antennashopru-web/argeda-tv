@@ -94,7 +94,7 @@ Release подписывается, если в корне проекта ест
 | Файл | Назначение |
 |---|---|
 | `M3u.java` | разбор M3U: `#EXTINF`, `#EXTGRP`, `#EXTVLCOPT`, заголовки после `\|`, `url-tvg`, `tvg-rec`/`catchup-days` |
-| `Xtream.java` | Xtream Codes → список каналов (`player_api.php`) |
+| `Xtream.kt` | Xtream Codes → список каналов (`player_api.php`) |
 | `Epg.java` | потоковый разбор XMLTV: только каналы плейлиста, окно «глубина архива … +2 суток» |
 | `Catchup.java` | ссылки на записи: shift, flussonic, xc, default, append |
 | `Playback.java` | один проигрыватель на всё приложение: предпросмотр → полный экран без перезагрузки |
