@@ -93,16 +93,16 @@ Release подписывается, если в корне проекта ест
 
 | Файл | Назначение |
 |---|---|
-| `M3u.java` | разбор M3U: `#EXTINF`, `#EXTGRP`, `#EXTVLCOPT`, заголовки после `\|`, `url-tvg`, `tvg-rec`/`catchup-days` |
+| `M3u.kt` | разбор M3U: `#EXTINF`, `#EXTGRP`, `#EXTVLCOPT`, заголовки после `\|`, `url-tvg`, `tvg-rec`/`catchup-days` |
 | `Xtream.kt` | Xtream Codes → список каналов (`player_api.php`) |
-| `Epg.java` | потоковый разбор XMLTV: только каналы плейлиста, окно «глубина архива … +2 суток» |
-| `Catchup.java` | ссылки на записи: shift, flussonic, xc, default, append |
+| `Epg.kt` | потоковый разбор XMLTV: только каналы плейлиста, окно «глубина архива … +2 суток» |
+| `Catchup.kt` | ссылки на записи: shift, flussonic, xc, default, append |
 | `Playback.java` | один проигрыватель на всё приложение: предпросмотр → полный экран без перезагрузки |
 | `EpgAdapter.java` | список передач: «сейчас», «запись», дни |
-| `Store.java` | плейлисты, кэш на диске, избранное, недавние, PIN |
+| `Store.kt` | плейлисты, кэш на диске, избранное, недавние, PIN |
 | `MainActivity.java` | группы, каналы, поиск, настройки |
 | `PlayerActivity.java` | полный экран: пульт, жесты, список каналов, телепрограмма, перемотка записи |
-| `SourceActivity.java`, `LinkServer.java` | добавление плейлиста, ввод с телефона |
+| `SourceActivity.java`, `LinkServer.kt` | добавление плейлиста, ввод с телефона |
 
 ## Пока нет
 
