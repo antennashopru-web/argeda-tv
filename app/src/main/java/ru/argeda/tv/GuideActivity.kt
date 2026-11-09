@@ -24,7 +24,7 @@ import kotlin.math.abs
  * Сетка телепрограммы: все каналы списка, по три передачи с выбранного момента.
  * ◀ ▶ — час назад / вперёд, OK — смотреть: эфир, запись с начала передачи или напоминание о будущей.
  */
-class GuideActivity : Activity() {
+internal class GuideActivity : Activity() {
     private lateinit var st: Store
     private var at = 0L // 0 — сейчас
     private lateinit var whenText: TextView
@@ -60,7 +60,7 @@ class GuideActivity : Activity() {
         top.gravity = Gravity.CENTER_VERTICAL
         val t = text(20f, R.color.text)
         t.setTypeface(null, Typeface.BOLD)
-        t.text = "Телепрограмма · $title"
+        t.text = "Телепрограмма · ${Companion.title}"
         t.isSingleLine = true
         t.ellipsize = TextUtils.TruncateAt.END
         top.addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -165,7 +165,7 @@ class GuideActivity : Activity() {
         }
         st.playList = ArrayList(l)
         st.playIndex = maxOf(0, l.indexOf(c))
-        st.playTitle = title
+        st.playTitle = Companion.title
         st.played(c)
         if (at != 0L && t < now - 60_000L) {
             val from = p?.start ?: t
