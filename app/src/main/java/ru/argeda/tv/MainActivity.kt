@@ -959,6 +959,8 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             acts.add { openGuide() }
             items.add("Поиск передачи…")
             acts.add { askText("Название передачи", "") { searchProgs(it) } }
+            items.add("Проверить каналы")
+            acts.add { Checker.start(this) { render() } }
         }
         if (st.hiddenCh.isNotEmpty() || st.hiddenGroups.isNotEmpty()) {
             items.add("Скрытые каналы и категории…")

@@ -57,6 +57,9 @@ internal class Store private constructor(@JvmField val app: Context) {
     @JvmField val hiddenCh: MutableSet<String> = HashSet()
     @JvmField val hiddenGroups: MutableSet<String> = HashSet()
 
+    /** Каналы, которые не ответили при последней проверке (Checker). Пометка снимается, когда канал заиграл. */
+    private val dead: MutableSet<String> = HashSet()
+
     /** Настройки под PIN-кодом открыты до выхода из приложения. */
     @JvmField var settingsOpen = false
 
@@ -99,6 +102,7 @@ internal class Store private constructor(@JvmField val app: Context) {
         for (k in fav) if (!favOrder.contains(k)) favOrder.add(k)
         hiddenCh.addAll(p.getStringSet("hidden", HashSet()) ?: emptySet())
         hiddenGroups.addAll(p.getStringSet("hiddenG", HashSet()) ?: emptySet())
+        dead.addAll(p.getStringSet("dead", HashSet()) ?: emptySet())
         jsonArray("favg") { a -> for (i in 0 until a.length()) favGroups.add(a.getString(i)) }
         jsonArray("recent") { a -> for (i in 0 until a.length()) recent.add(a.getString(i)) }
         lastKey = p.getString("last", "")
@@ -409,6 +413,22 @@ internal class Store private constructor(@JvmField val app: Context) {
 
     /** Название канала по ключу (для списка скрытых); null — в текущем плейлисте его нет. */
     fun byKey(k: String): Channel? = all.firstOrNull { it.key() == k }
+
+    // ---------- Проверка каналов ----------
+
+    fun isDead(c: Channel): Boolean = dead.isNotEmpty() && dead.contains(c.key())
+
+    /** Итог проверки: у проверенных каналов пометка ставится заново, у остальных остаётся прежней. */
+    fun setDead(tested: Set<String>, bad: Collection<String>) {
+        dead.removeAll(tested)
+        dead.addAll(bad)
+        p.edit().putStringSet("dead", HashSet(dead)).apply()
+    }
+
+    /** Канал заиграл — значит, работает. */
+    fun alive(c: Channel) {
+        if (dead.remove(c.key())) p.edit().putStringSet("dead", HashSet(dead)).apply()
+    }
 
     // ---------- PIN на настройки ----------
 

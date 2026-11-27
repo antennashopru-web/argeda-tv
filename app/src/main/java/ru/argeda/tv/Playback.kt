@@ -243,6 +243,7 @@ internal class Playback private constructor(private val app: Context) {
         override fun onPlaybackStateChanged(state: Int) {
             buffering = state == Player.STATE_BUFFERING
             if (state == Player.STATE_READY) {
+                channel?.let { if (!isArchive()) st.alive(it) }
                 retries = 0
                 error = ""
                 fatal = false

@@ -84,6 +84,12 @@ internal class ChannelAdapter(private val st: Store, private val l: Listener) : 
             h.now.visibility = View.GONE
             h.prog.visibility = View.GONE
         }
+        val dead = st.isDead(c)
+        if (dead) {
+            h.now.text = if (p != null && p.title.isNotEmpty()) "Не отвечал при проверке · " + p.title else "Не отвечал при проверке"
+            h.now.visibility = View.VISIBLE
+        }
+        h.itemView.alpha = if (dead) 0.5f else 1f
         h.fav.visibility = if (st.isFav(c)) View.VISIBLE else View.GONE
         h.itemView.isSelected = c === current
     }
