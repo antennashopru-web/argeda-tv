@@ -15,11 +15,14 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.util.Rational
 import android.view.GestureDetector
+import android.view.Gravity
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.annotation.OptIn
@@ -72,6 +75,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
     private lateinit var bQuality: TextView
     private lateinit var bSubs: TextView
     private lateinit var infoProg: ProgressBar
+    private lateinit var infoBtns: View
     private lateinit var sideList: RecyclerView
     private lateinit var epgSideList: RecyclerView
     private lateinit var sa: ChannelAdapter
@@ -147,6 +151,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         infoNow = findViewById(R.id.infoNow)
         infoNext = findViewById(R.id.infoNext)
         infoProg = findViewById(R.id.infoProg)
+        infoBtns = findViewById(R.id.infoBtns)
         bList = findViewById(R.id.bList)
         bLive = findViewById(R.id.bLive)
         bFav = findViewById(R.id.bFav)
@@ -364,6 +369,10 @@ internal class PlayerActivity : Activity(), Playback.Listener {
     override fun onConfigurationChanged(c: Configuration) {
         super.onConfigurationChanged(c)
         fitPanels()
+        if (compact) { // ширина плашки зависит от ширины экрана
+            compact = false
+            setCompact(true)
+        }
         hideSystemUi()
     }
 
@@ -690,7 +699,11 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         bFav.setCompoundDrawablesRelativeWithIntrinsicBounds(if (on) R.drawable.ic_star else R.drawable.ic_star_outline, 0, 0, 0)
     }
 
-    private fun showInfo(focus: Boolean) {
+    /** Телефон: при листании — маленькая плашка внизу слева, полная панель с кнопками — по касанию. */
+    private var compact = false
+
+    private fun showInfo(focus: Boolean, full: Boolean = tv || focus) {
+        setCompact(!full)
         val c = list[index]
         infoNum.text = c.num.toString()
         infoName.text = c.name
@@ -703,7 +716,35 @@ internal class PlayerActivity : Activity(), Playback.Listener {
             (if (pb.isArchive()) bLive else bList).requestFocus()
         } else if (!btns) parkFocus()
         ui.removeCallbacks(hideInfoRun)
-        ui.postDelayed(hideInfoRun, if (btns || !tv) 8000L else 5000L)
+        ui.postDelayed(hideInfoRun, if (compact) 3500L else if (btns || !tv) 8000L else 5000L)
+    }
+
+    private fun setCompact(on: Boolean) {
+        if (on == compact) return
+        compact = on
+        val lp = info.layoutParams as FrameLayout.LayoutParams
+        val w = resources.displayMetrics.widthPixels
+        if (on) {
+            lp.width = min(Ui.dp(this, 440), w - Ui.dp(this, 24))
+            lp.gravity = Gravity.BOTTOM or Gravity.START
+            lp.setMargins(Ui.dp(this, 12), 0, 0, Ui.dp(this, 12))
+            info.setPadding(Ui.dp(this, 12), Ui.dp(this, 10), Ui.dp(this, 12), Ui.dp(this, 10))
+        } else {
+            lp.width = ViewGroup.LayoutParams.MATCH_PARENT
+            lp.gravity = Gravity.BOTTOM
+            val m = Ui.dp(this, 20)
+            lp.setMargins(m, m, m, m)
+            val pd = Ui.dp(this, 16)
+            info.setPadding(pd, pd, pd, pd)
+        }
+        info.layoutParams = lp
+        val v = if (on) View.GONE else View.VISIBLE
+        infoGroup.visibility = v
+        infoBtns.visibility = v
+        val ts = if (on) 17f else 22f
+        infoNum.textSize = ts
+        infoName.textSize = ts
+        infoNow.textSize = if (on) 14f else 16f
     }
 
     private fun hideInfo() {
@@ -718,6 +759,11 @@ internal class PlayerActivity : Activity(), Playback.Listener {
     }
 
     private fun fillTime() {
+        fillInfo()
+        if (compact) infoNext.visibility = View.GONE
+    }
+
+    private fun fillInfo() {
         val c = list[index]
         if (pb.isArchive() && MainActivity.same(pb.channel, c)) {
             val pos = pb.position()
@@ -1102,8 +1148,8 @@ internal class PlayerActivity : Activity(), Playback.Listener {
                 if (side.visibility == View.VISIBLE) hideSide()
                 else if (epgSide.visibility == View.VISIBLE) hideEpg()
                 else if (pb.fatal) pb.retry()
-                else if (info.visibility == View.VISIBLE) hideInfo()
-                else showInfo(false)
+                else if (info.visibility == View.VISIBLE && !compact) hideInfo()
+                else showInfo(false, true)
                 return true
             }
 
