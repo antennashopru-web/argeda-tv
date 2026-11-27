@@ -5,6 +5,7 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.app.Activity
 import android.content.Context
+import android.content.res.Resources
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Outline
@@ -16,6 +17,7 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -116,7 +118,8 @@ internal class Splash private constructor(private val a: Activity, private val d
             val l = TextView(a)
             l.text = text[i].toString()
             l.setTextColor(if (i >= 7) 0xFFB57BFF.toInt() else Color.WHITE)
-            l.textSize = 36f
+            // Размер надписи как при системном размере шрифта — настройка «Размер текста» заставку не меняет.
+            l.setTextSize(TypedValue.COMPLEX_UNIT_PX, 36f * a.resources.displayMetrics.density * Resources.getSystem().configuration.fontScale)
             l.typeface = Typeface.DEFAULT_BOLD
             l.includeFontPadding = false
             l.setShadowLayer(dp(10f).toFloat(), 0f, 0f, if (i >= 7) 0xCC8B5CF6.toInt() else 0x667C3AED)
