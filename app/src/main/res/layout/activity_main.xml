@@ -30,6 +30,11 @@
             android:paddingStart="14dp" android:paddingEnd="14dp" android:textColor="@color/text"
             android:textColorHint="@color/muted" android:textSize="14sp" />
 
+        <ImageView android:id="@+id/voice" android:layout_width="44dp" android:layout_height="40dp"
+            android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
+            android:clickable="true" android:padding="9dp" android:scaleType="fitCenter" android:visibility="gone"
+            android:src="@drawable/ic_mic" android:contentDescription="Голосовой поиск" />
+
         <ImageView android:id="@+id/menu" android:layout_width="44dp" android:layout_height="40dp"
             android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
             android:clickable="true" android:padding="8dp" android:scaleType="fitCenter"

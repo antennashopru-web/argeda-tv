@@ -19,6 +19,13 @@
     <uses-feature android:name="android.hardware.screen.landscape" android:required="false" />
 
     <!-- Многие IPTV-потоки идут по http, поэтому открытый трафик разрешён -->
+    <!-- Голосовой поиск: с Android 11 без этого не видно, есть ли на устройстве распознавание речи. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:banner="@drawable/banner"

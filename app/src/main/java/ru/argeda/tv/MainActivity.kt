@@ -225,6 +225,11 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
 
         source.setOnClickListener { if (narrow) pickGroup() else pickSource() }
         findViewById<View>(R.id.menu).setOnClickListener { menu() }
+        val voice = findViewById<View>(R.id.voice)
+        if (Voice.available(this)) {
+            voice.visibility = View.VISIBLE
+            voice.setOnClickListener { Voice.listen(this) }
+        }
         emptyBtn.setOnClickListener {
             val s = st.current()
             if (s == null) addSource() else editSource(s)
@@ -334,6 +339,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
         super.onActivityResult(req, res, data)
         Backup.result(this, req, res, data)
+        Voice.result(req, res, data)?.let { voiceSearch(it) }
     }
 
     override fun changed() {
@@ -350,6 +356,11 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             return true
         }
         if (code == KeyEvent.KEYCODE_SEARCH) {
+            // Кнопка с микрофоном на пульте обычно шлёт «Поиск»: если есть распознавание речи — слушаем.
+            if (Voice.available(this)) {
+                Voice.listen(this)
+                return true
+            }
             search.requestFocus()
             (getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager?)?.showSoftInput(search, 0)
             return true
@@ -472,6 +483,23 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         if (indexOfGroup(curGroup) < 0) curGroup = G_ALL
         ga.notifyDataSetChanged()
         if (narrow) source.text = titleOf(curGroup) + "  ▾"
+    }
+
+    /** Сказали название: если такой канал есть — сразу включаем, иначе показываем похожие. */
+    private fun voiceSearch(said: String) {
+        val c = Voice.best(said, st.visible())
+        if (c != null) {
+            if (search.length() > 0) search.setText("")
+            select(c, PREVIEW_NONE)
+            openFull(c)
+            return
+        }
+        search.setText(said)
+        search.setSelection(search.length())
+        ui.removeCallbacks(filterRun)
+        applyFilter()
+        if (ca.itemCount == 0) Ui.toast(this, "Канал «$said» не найден")
+        else focusChannel(0)
     }
 
     private fun applyFilter() {
