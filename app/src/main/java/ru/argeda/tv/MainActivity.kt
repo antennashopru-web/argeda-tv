@@ -86,6 +86,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
     private lateinit var empty: View
     private lateinit var loading: View
     private var narrow = false
+    private var pendingPlay: String? = null
     private var focusLast = true
     private var curGroup = G_ALL
     private var listKey = ""
@@ -252,7 +253,9 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             true
         }
 
-        if (b == null && st.splash()) splash = Splash.show(this) { splashDone() }
+        pendingPlay = intent?.getStringExtra(HomeChannel.EXTRA_PLAY)
+        // С главного экрана ТВ сразу на канал — заставку не показываем.
+        if (b == null && st.splash() && pendingPlay == null) splash = Splash.show(this) { splashDone() }
     }
 
     /** Звук канала плавно нарастает, пока доигрывает хвост озвучки заставки. */
@@ -284,7 +287,28 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         playbackChanged()
     }
 
+    override fun onNewIntent(i: Intent) {
+        super.onNewIntent(i)
+        setIntent(i)
+        i.getStringExtra(HomeChannel.EXTRA_PLAY)?.let {
+            pendingPlay = it
+            playPending()
+        }
+    }
+
+    /** Канал, выбранный на главном экране Android TV: включаем, как только плейлист загружен. */
+    private fun playPending() {
+        val k = pendingPlay ?: return
+        val vis = st.visible()
+        if (vis.isEmpty()) return
+        pendingPlay = null
+        val c = vis.firstOrNull { it.key() == k } ?: return
+        select(c, PREVIEW_NONE)
+        openFull(c)
+    }
+
     override fun onStop() {
+        HomeChannel.update(this)
         super.onStop()
         Alerts.detach(this)
         splash?.cancel()
@@ -443,6 +467,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             }
         }
         if (sel == null) showInfo(null)
+        playPending()
     }
 
     private fun show(v: View) {
