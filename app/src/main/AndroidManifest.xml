@@ -18,7 +18,6 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.screen.landscape" android:required="false" />
 
-    <!-- Многие IPTV-потоки идут по http, поэтому открытый трафик разрешён -->
     <!-- Голосовой поиск: с Android 11 без этого не видно, есть ли на устройстве распознавание речи. -->
     <queries>
         <intent>
@@ -26,6 +25,7 @@
         </intent>
     </queries>
 
+    <!-- Многие IPTV-потоки идут по http, поэтому открытый трафик разрешён -->
     <application
         android:allowBackup="false"
         android:banner="@drawable/banner"
