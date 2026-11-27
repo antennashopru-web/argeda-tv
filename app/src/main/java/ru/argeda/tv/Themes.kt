@@ -23,15 +23,34 @@ internal object Themes {
         a.recreate()
     }
 
-    /** Вызывать из attachBaseContext после super: подменяет ночной режим для ресурсов экрана. */
+    /** Размер текста: множитель к системному. */
+    @JvmField
+    val TEXT_NAMES = arrayOf("Мелкий", "Обычный", "Крупный", "Очень крупный")
+    private val TEXT_SCALE = floatArrayOf(0.85f, 1f, 1.15f, 1.3f)
+    private const val PREF_TEXT = "textSize"
+
+    @JvmStatic
+    fun textSize(c: Context): Int = c.getSharedPreferences("argeda", Context.MODE_PRIVATE).getInt(PREF_TEXT, 1).coerceIn(0, TEXT_SCALE.size - 1)
+
+    @JvmStatic
+    fun setTextSize(a: Activity, i: Int) {
+        a.getSharedPreferences("argeda", Context.MODE_PRIVATE).edit().putInt(PREF_TEXT, i).apply()
+        a.recreate()
+    }
+
+    /** Вызывать из attachBaseContext после super: подменяет ночной режим и размер текста для ресурсов экрана. */
     @JvmStatic
     fun apply(a: Activity, base: Context, forceDark: Boolean) {
         val mode = if (forceDark) DARK else get(base)
-        if (mode == SYSTEM) return
-        val ui = base.resources.configuration.uiMode
+        val scale = TEXT_SCALE[textSize(base)]
+        if (mode == SYSTEM && scale == 1f) return
         val o = Configuration()
-        o.uiMode = (ui and Configuration.UI_MODE_NIGHT_MASK.inv()) or
-            if (mode == DARK) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+        if (mode != SYSTEM) {
+            val ui = base.resources.configuration.uiMode
+            o.uiMode = (ui and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+                if (mode == DARK) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
+        }
+        if (scale != 1f) o.fontScale = base.resources.configuration.fontScale * scale
         a.applyOverrideConfiguration(o)
     }
 }

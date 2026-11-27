@@ -1047,6 +1047,8 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         acts.add { Alerts.nextSleep(this) }
         items.add("Тема: " + Themes.NAMES[Themes.get(this)])
         acts.add { chooseTheme() }
+        items.add("Размер текста: " + Themes.TEXT_NAMES[Themes.textSize(this)])
+        acts.add { chooseTextSize() }
         items.add("Проверить обновления")
         acts.add { Updater.check(this, true) }
         items.add("О приложении")
@@ -1173,6 +1175,14 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             st.settingsOpen = true
             Ui.toast(this, "Настройки защищены PIN-кодом")
         }
+    }
+
+    private fun chooseTextSize() {
+        AlertDialog.Builder(this).setTitle("Размер текста")
+            .setSingleChoiceItems(Themes.TEXT_NAMES, Themes.textSize(this)) { d, w ->
+                d.dismiss()
+                if (w != Themes.textSize(this)) Themes.setTextSize(this, w)
+            }.show()
     }
 
     private fun chooseTheme() {
