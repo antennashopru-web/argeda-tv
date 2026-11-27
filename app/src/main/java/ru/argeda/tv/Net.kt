@@ -36,7 +36,7 @@ internal object Net {
     @JvmStatic
     @JvmOverloads
     @Throws(IOException::class)
-    fun open(url: String, ua: String?, accept: String? = null, connectMs: Int = 15000, readMs: Int = 30000): HttpURLConnection {
+    fun open(url: String, ua: String?, accept: String? = null, connectMs: Int = 15000, readMs: Int = 30000, referer: String? = null): HttpURLConnection {
         var u = url.trim()
         repeat(6) { hop ->
             val x = URL(u)
@@ -50,6 +50,7 @@ internal object Net {
             c.setRequestProperty("Accept-Encoding", "gzip")
             // Accept нужен только самому API; на переадресованный адрес хранилища его не шлём.
             if (accept != null && hop == 0) c.setRequestProperty("Accept", accept)
+            if (!referer.isNullOrEmpty()) c.setRequestProperty("Referer", referer)
             val code = c.responseCode
             if (code in 300..399 && code != 304) {
                 val loc = c.getHeaderField("Location")

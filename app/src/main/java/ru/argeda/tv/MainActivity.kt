@@ -32,6 +32,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -798,6 +799,8 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         }
         labels.add("      ⊘  Скрыть канал")
         val hideAt = labels.size - 1
+        labels.add("      ●  Записать…")
+        val recAt = labels.size - 1
         AlertDialog.Builder(this).setTitle(c.name).setItems(labels.toTypedArray()) { _, w ->
             if (movable && (w == moveAt || w == moveAt + 1)) {
                 if (st.move(inF, c, if (w == moveAt) -1 else 1)) {
@@ -808,6 +811,10 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
                         focusChannel(i)
                     }
                 }
+                return@setItems
+            }
+            if (w == recAt) {
+                askRecord(c)
                 return@setItems
             }
             if (w == hideAt) {
@@ -1065,6 +1072,8 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         acts.add { chooseTextSize() }
         items.add("Проверить обновления")
         acts.add { Updater.check(this, true) }
+        items.add("Записи…")
+        acts.add { recordings() }
         items.add("Подсказка: как пользоваться")
         acts.add { Hint.show(this, st.current() != null) { addSource() } }
         items.add("О приложении")
@@ -1301,6 +1310,76 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
                     st.setKids(false, st.kidsAllowed())
                     render()
                     Ui.toast(this, "Детский режим выключен")
+                }
+            }.show()
+    }
+
+    // ---------- Запись ----------
+
+    private fun askRecord(c: Channel) {
+        val now = System.currentTimeMillis()
+        val p = Epg.at(c.progs, now)
+        val labels = ArrayList<String>()
+        val lens = ArrayList<Long>()
+        if (p != null && p.stop > now + 60_000) {
+            labels.add("До конца передачи «" + p.title + "» (до " + hm.format(Date(p.stop)) + ")")
+            lens.add(p.stop - now + 60_000)
+        }
+        for ((t, m) in listOf("30 минут" to 30L, "1 час" to 60L, "2 часа" to 120L, "3 часа" to 180L)) {
+            labels.add(t)
+            lens.add(m * 60_000)
+        }
+        AlertDialog.Builder(this).setTitle("Записать «" + c.name + "»")
+            .setItems(labels.toTypedArray()) { _, w ->
+                val s = st.current()
+                val ua = c.userAgent.ifEmpty { s?.ua.orEmpty() }.ifEmpty { Net.UA }
+                Recorder.start(this, c, ua, lens[w])
+                Ui.toast(this, "Запись «" + c.name + "» началась. Записи: Настройки → «Записи»")
+            }.show()
+    }
+
+    private fun recordings() {
+        val files = Recorder.files(this)
+        if (files.isEmpty()) {
+            Ui.toast(this, "Записей пока нет. Записать: долгое нажатие на канал → «Записать…»")
+            return
+        }
+        val names = files.map { f ->
+            val mb = String.format(Locale.ROOT, "%.0f", f.length() / 1048576.0)
+            (if (Recorder.active(f) != null) "● " else "") + f.nameWithoutExtension + "  ·  " + mb + " МБ"
+        }
+        AlertDialog.Builder(this).setTitle("Записи")
+            .setItems(names.toTypedArray()) { _, w -> recording(files[w]) }
+            .setNegativeButton("Закрыть", null).show()
+    }
+
+    private fun recording(f: File) {
+        val job = Recorder.active(f)
+        val acts = ArrayList<String>()
+        acts.add("Смотреть")
+        acts.add(if (job != null) "Остановить запись" else "Удалить")
+        AlertDialog.Builder(this).setTitle(f.nameWithoutExtension)
+            .setItems(acts.toTypedArray()) { _, w ->
+                if (w == 0) {
+                    val c = Channel()
+                    c.name = f.nameWithoutExtension
+                    c.url = Uri.fromFile(f).toString()
+                    st.playList = listOf(c)
+                    st.playIndex = 0
+                    st.playTitle = "Записи"
+                    pb.play(c)
+                    previewRun?.let { ui.removeCallbacks(it) }
+                    startActivity(Intent(this, PlayerActivity::class.java).putExtra("key", c.key()))
+                } else if (job != null) {
+                    job.stop.set(true)
+                    Ui.toast(this, "Запись останавливается…")
+                } else {
+                    AlertDialog.Builder(this).setTitle("Удалить запись?").setMessage(f.nameWithoutExtension)
+                        .setPositiveButton("Удалить") { _, _ ->
+                            if (pb.channel?.url == Uri.fromFile(f).toString()) pb.stop()
+                            f.delete()
+                            Ui.toast(this, "Запись удалена")
+                        }.setNegativeButton("Отмена", null).show()
                 }
             }.show()
     }

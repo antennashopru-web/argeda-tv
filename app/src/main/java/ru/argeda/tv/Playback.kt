@@ -205,7 +205,8 @@ internal class Playback private constructor(private val app: Context) {
             url = a
         }
         val scheme = Uri.parse(url).scheme
-        if (scheme == null || !(scheme.equals("http", ignoreCase = true) || scheme.equals("https", ignoreCase = true))) {
+        val file = scheme.equals("file", ignoreCase = true) // запись с устройства
+        if (scheme == null || !(file || scheme.equals("http", ignoreCase = true) || scheme.equals("https", ignoreCase = true))) {
             p.stop()
             fail("Ссылки вида $scheme:// пока не поддерживаются.", true)
             return
@@ -249,7 +250,7 @@ internal class Playback private constructor(private val app: Context) {
                 fatal = false
             } else if (state == Player.STATE_ENDED) {
                 if (isArchive()) seekArchive(position()) // запись закончилась — идём дальше по времени
-                else ui.postDelayed(retryRun, 1500) // прямой эфир оборвался — переподключаемся
+                else if (channel?.url?.startsWith("file:") != true) ui.postDelayed(retryRun, 1500) // прямой эфир оборвался — переподключаемся
             }
             notifyChanged()
         }
