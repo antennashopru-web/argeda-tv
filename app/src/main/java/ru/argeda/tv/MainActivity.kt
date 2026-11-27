@@ -972,6 +972,10 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
 
     /** Настройки под PIN-кодом (если включено): код спрашивается один раз до выхода из приложения. */
     private fun menu() {
+        if (st.kids()) {
+            kidsMenu()
+            return
+        }
         if (!st.settingsPin() || st.settingsOpen || !st.hasPin()) {
             settings()
             return
@@ -1029,6 +1033,10 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         if (st.adultCount() > 0) {
             items.add(if (st.showAdult) "Скрыть каналы 18+" else "Показать каналы 18+")
             acts.add { toggleAdult() }
+        }
+        if (st.all.isNotEmpty()) {
+            items.add("Детский режим…")
+            acts.add { setupKids() }
         }
         items.add(if (st.settingsPin()) "PIN-код на настройки: выключить" else "PIN-код на настройки: включить")
         acts.add { toggleSettingsPin() }
@@ -1223,6 +1231,70 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
                 render()
             }
         }
+    }
+
+    /** Включение детского режима: выбрать категории и папки, задать PIN (если его ещё нет). */
+    private fun setupKids() {
+        val ids = ArrayList<String>()
+        val names = ArrayList<String>()
+        for (f in st.folders) {
+            ids.add("f:" + f.name)
+            names.add("Папка «" + f.name + "»")
+        }
+        val groups = LinkedHashSet<String>()
+        for (c in st.all) if (!c.adult && !st.hiddenGroups.contains(c.group)) groups.add(c.group)
+        // Детские категории — первыми в списке и уже отмечены.
+        val kidsLike = Regex("(?iu)(дет|мульт|kids|cartoon|детск|children|сказ)")
+        val sorted = groups.sortedWith(compareBy({ !kidsLike.containsMatchIn(it) }, { Channel.groupTitle(it) }))
+        for (g in sorted) {
+            ids.add(g)
+            names.add(Channel.groupTitle(g))
+        }
+        if (ids.isEmpty()) return
+        val prev = st.kidsAllowed()
+        val on = BooleanArray(ids.size) { i -> if (prev.isEmpty()) kidsLike.containsMatchIn(ids[i]) else prev.contains(ids[i]) }
+        AlertDialog.Builder(this).setTitle("Что можно смотреть детям")
+            .setMultiChoiceItems(names.toTypedArray(), on) { _, w, c -> on[w] = c }
+            .setPositiveButton("Включить") { _, _ ->
+                val allow = ids.filterIndexed { i, _ -> on[i] }.toSet()
+                if (allow.isEmpty()) {
+                    Ui.toast(this, "Отметьте хотя бы одну категорию")
+                    return@setPositiveButton
+                }
+                val go = {
+                    st.setKids(true, allow)
+                    if (pb.channel?.let { c -> st.visible().none { MainActivity.same(it, c) } } == true) pb.stop()
+                    selectGroup(G_ALL, false)
+                    render()
+                    Ui.toast(this, "Детский режим включён. Выключить: Настройки и PIN-код")
+                }
+                if (st.hasPin()) go()
+                else askPin("Придумайте PIN-код для выхода из детского режима (4–8 цифр)") { pin ->
+                    if (pin.length < 4) {
+                        Ui.toast(this, "PIN-код — не меньше 4 цифр")
+                        return@askPin
+                    }
+                    st.setPin(pin)
+                    go()
+                }
+            }
+            .setNegativeButton("Отмена", null).show()
+    }
+
+    /** В детском режиме вместо настроек — только выход по PIN-коду. */
+    private fun kidsMenu() {
+        AlertDialog.Builder(this).setTitle("Детский режим")
+            .setItems(arrayOf("Выключить детский режим")) { _, _ ->
+                askPin("PIN-код для выхода из детского режима") { pin ->
+                    if (!st.checkPin(pin)) {
+                        Ui.toast(this, "Неверный PIN-код")
+                        return@askPin
+                    }
+                    st.setKids(false, st.kidsAllowed())
+                    render()
+                    Ui.toast(this, "Детский режим выключен")
+                }
+            }.show()
     }
 
     private fun changePin() {
