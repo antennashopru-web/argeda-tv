@@ -123,9 +123,29 @@ internal object Catchup {
         val m = XC.matcher(url)
         if (!m.matches()) return url + (if (url.contains("?")) "&" else "?") + "utc=" + st + "&lutc=" + (System.currentTimeMillis() / 1000)
         val f = SimpleDateFormat("yyyy-MM-dd:HH-mm", Locale.ROOT)
-        f.timeZone = if (tz.isNullOrEmpty()) TimeZone.getDefault() else TimeZone.getTimeZone(tz)
+        f.timeZone = zone(tz)
         val ext = m.group(5) ?: ".ts"
         return m.group(1) + "/timeshift/" + m.group(2) + "/" + m.group(3) + "/" + maxOf(1L, (dur + 59) / 60) + "/" +
             f.format(Date(st * 1000)) + "/" + m.group(4) + ext + (m.group(6) ?: "")
+    }
+
+    private val OFFSET = Pattern.compile("^(?:UTC|GMT)?\\s*([+-])(\\d{1,2})(?::?(\\d{2}))?$", Pattern.CASE_INSENSITIVE)
+
+    /**
+     * Часовой пояс сервера: «Europe/Moscow», а также «+0300», «+03:00», «+3», «UTC+3», «GMT+03:00».
+     * TimeZone.getTimeZone понимает только названия и «GMT+03:00», остальное молча считает UTC.
+     */
+    @JvmStatic
+    fun zone(tz: String?): TimeZone {
+        val t = tz?.trim().orEmpty()
+        if (t.isEmpty()) return TimeZone.getDefault()
+        val m = OFFSET.matcher(t)
+        if (m.matches()) {
+            val h = m.group(2)!!.toInt()
+            val min = m.group(3)?.toInt() ?: 0
+            if (h <= 14 && min < 60) return TimeZone.getTimeZone(String.format(Locale.ROOT, "GMT%s%02d:%02d", m.group(1), h, min))
+        }
+        val z = TimeZone.getTimeZone(t)
+        return if (z.id == "GMT" && !t.equals("GMT", true) && !t.equals("UTC", true)) TimeZone.getDefault() else z
     }
 }
