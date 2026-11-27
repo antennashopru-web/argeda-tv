@@ -256,10 +256,16 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         pendingPlay = intent?.getStringExtra(HomeChannel.EXTRA_PLAY)
         // С главного экрана ТВ сразу на канал — заставку не показываем.
         if (b == null && st.splash() && pendingPlay == null) splash = Splash.show(this) { splashDone() }
+        else if (b == null && pendingPlay == null) ui.post { hint() }
     }
 
     /** Звук канала плавно нарастает, пока доигрывает хвост озвучки заставки. */
+    private fun hint() {
+        Hint.maybeShow(this, st.current() != null) { addSource() }
+    }
+
     private fun splashDone() {
+        hint()
         val va = ValueAnimator.ofFloat(0f, 1f).setDuration(1800)
         va.startDelay = 300
         va.addUpdateListener { an -> pb.player?.volume = an.animatedValue as Float }
@@ -1059,6 +1065,8 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         acts.add { chooseTextSize() }
         items.add("Проверить обновления")
         acts.add { Updater.check(this, true) }
+        items.add("Подсказка: как пользоваться")
+        acts.add { Hint.show(this, st.current() != null) { addSource() } }
         items.add("О приложении")
         acts.add { about() }
         AlertDialog.Builder(this).setTitle("Настройки")
