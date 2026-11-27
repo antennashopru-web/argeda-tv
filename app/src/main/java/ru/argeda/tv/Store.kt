@@ -346,13 +346,43 @@ internal class Store private constructor(@JvmField val app: Context) {
 
     fun visible(): List<Channel> {
         visibleCache?.let { return it }
-        val v = if (showAdult && hiddenCh.isEmpty() && hiddenGroups.isEmpty()) all
+        val kids = kids()
+        val v = if (kids) all.filterTo(ArrayList()) { kidsOk(it) && !isHidden(it) }
+        else if (showAdult && hiddenCh.isEmpty() && hiddenGroups.isEmpty()) all
         else all.filterTo(ArrayList(all.size)) { (showAdult || !it.adult) && !isHidden(it) }
         visibleCache = v
         return v
     }
 
     fun adultCount(): Int = all.count { it.adult }
+
+    // ---------- Детский режим ----------
+
+    /** Детский режим: видны только выбранные категории (и папки «Моё»), без 18+. Выйти можно по PIN-коду. */
+    fun kids(): Boolean = p.getBoolean("kids", false)
+
+    /** Что разрешено: названия категорий плейлиста и «f:Папка» для своих папок. */
+    fun kidsAllowed(): Set<String> = p.getStringSet("kidsAllow", emptySet()) ?: emptySet()
+
+    fun setKids(on: Boolean, allowed: Set<String>) {
+        p.edit().putBoolean("kids", on).putStringSet("kidsAllow", HashSet(allowed)).apply()
+        if (on) showAdult = false
+        kidsKeys = null
+        visibleCache = null
+    }
+
+    private var kidsKeys: Set<String>? = null
+
+    private fun kidsOk(c: Channel): Boolean {
+        if (c.adult) return false
+        val allow = kidsAllowed()
+        if (allow.contains(c.group)) return true
+        val keys = kidsKeys ?: HashSet<String>().also { k ->
+            for (f in folders) if (allow.contains("f:" + f.name)) k.addAll(f.keys)
+            kidsKeys = k
+        }
+        return keys.contains(c.key())
+    }
 
     fun setShowAdult(b: Boolean) {
         showAdult = b
@@ -536,6 +566,8 @@ internal class Store private constructor(@JvmField val app: Context) {
     }
 
     private fun saveFolders() {
+        kidsKeys = null
+        visibleCache = null
         val a = JSONArray()
         try {
             for (f in folders) a.put(JSONObject().put("n", f.name).put("k", JSONArray(f.keys)))
