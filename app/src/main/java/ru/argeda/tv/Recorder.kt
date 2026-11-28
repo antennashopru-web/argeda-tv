@@ -9,12 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
-import android.os.Environment
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
 import java.io.OutputStream
 import java.net.URL
@@ -30,8 +27,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Зашифрованные (AES) и fMP4-потоки записать нельзя — об этом сообщается.
  */
 internal object Recorder {
-    class Job(@JvmField val name: String, @JvmField val file: File, @JvmField val until: Long) {
+    class Job(@JvmField val name: String, @JvmField val until: Long) {
         @JvmField val stop = AtomicBoolean(false)
+        /** Файл, который пишется сейчас (file:// или content:// на флешке). */
+        @JvmField @Volatile var uri = ""
+        /** Где идёт запись: «на флешке» / «в памяти устройства». */
+        @JvmField @Volatile var where = ""
         @JvmField @Volatile var bytes = 0L
         @JvmField @Volatile var error = ""
     }
@@ -39,28 +40,21 @@ internal object Recorder {
     @JvmField val jobs: MutableList<Job> = Collections.synchronizedList(ArrayList())
     private val main = Handler(Looper.getMainLooper())
 
-    fun dir(c: Context): File {
-        val d = File(c.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: c.filesDir, "ARGEDA")
-        d.mkdirs()
-        return d
-    }
-
-    /** Записи на устройстве, новые сверху. */
-    fun files(c: Context): List<File> =
-        (dir(c).listFiles { f -> f.isFile && f.name.endsWith(".ts") } ?: emptyArray()).sortedByDescending { it.lastModified() }
+    /** Записи в памяти устройства и на флешке, новые сверху. */
+    fun files(c: Context): List<RecStore.Rec> = RecStore.all(c)
 
     /** Запись канала 18+ (в названии файла есть пометка) — смотреть по PIN-коду. */
-    fun isAdult(f: File): Boolean = M3u.ADULT.matcher(f.nameWithoutExtension).find()
+    fun isAdult(name: String): Boolean = M3u.ADULT.matcher(name).find()
 
-    fun active(f: File): Job? = synchronized(jobs) { jobs.firstOrNull { it.file == f } }
+    fun active(r: RecStore.Rec): Job? = synchronized(jobs) { jobs.firstOrNull { it.uri == r.uri } }
 
     fun start(c: Context, ch: Channel, ua: String, durationMs: Long) {
         val app = c.applicationContext
         val stamp = SimpleDateFormat("yyyy-MM-dd HH-mm", Locale.ROOT).format(Date())
         var safe = ch.name.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().ifEmpty { "Канал" }
         if (ch.adult && !M3u.ADULT.matcher(safe).find()) safe += " (18+)" // такую запись тоже смотрят по PIN-коду
-        val f = File(dir(app), "$safe $stamp.ts")
-        val job = Job(ch.name, f, System.currentTimeMillis() + durationMs)
+        val base = "$safe $stamp"
+        val job = Job(ch.name, System.currentTimeMillis() + durationMs)
         jobs.add(job)
         val i = Intent(app, RecordService::class.java)
         try {
@@ -69,16 +63,23 @@ internal object Recorder {
             // Запись по расписанию, а система не дала запустить службу из фона — пишем без неё.
         }
         Thread({
+            var sink: RecSink? = null
             try {
-                FileOutputStream(f).use { out -> capture(job, ch, ua, out, false) }
+                val k = RecSink.open(app, base, job) { w -> main.post { Ui.toast(app, w) } }
+                sink = k
+                job.where = if (k.place.usb) "на флешке" else "в памяти устройства"
+                k.use { out -> capture(job, ch, ua, out, false) }
             } catch (e: Exception) {
-                if (job.error.isEmpty() && !job.stop.get()) job.error = Store.describe(e)
+                if (job.error.isEmpty() && !job.stop.get()) job.error = sink?.why(e) ?: Store.describe(e)
             } finally {
-                if (job.bytes == 0L) f.delete()
+                try {
+                    sink?.close()
+                } catch (_: Exception) {
+                }
                 jobs.remove(job)
                 main.post {
                     val msg = if (job.error.isNotEmpty()) "Запись «${job.name}» остановлена: ${job.error}"
-                    else "Запись «${job.name}» готова: Настройки → «Записи»"
+                    else "Запись «${job.name}» готова (${job.where}): Настройки → «Записи»"
                     Ui.toast(app, msg)
                     RecordService.refresh(app)
                 }
