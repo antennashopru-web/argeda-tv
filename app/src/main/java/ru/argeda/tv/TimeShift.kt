@@ -38,7 +38,7 @@ internal object TimeShift {
         val dir = c.externalCacheDir ?: c.cacheDir
         val f = File(dir, "timeshift.ts")
         f.delete()
-        val j = Recorder.Job(ch.name, f, System.currentTimeMillis() + MAX_MS)
+        val j = Recorder.Job(ch.name, System.currentTimeMillis() + MAX_MS)
         job = j
         file = f
         url = ch.url

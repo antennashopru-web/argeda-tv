@@ -31,7 +31,6 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -369,6 +368,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
     override fun onActivityResult(req: Int, res: Int, data: Intent?) {
         super.onActivityResult(req, res, data)
         Backup.result(this, req, res, data)
+        RecStore.result(this, req, res, data)
         Voice.result(req, res, data)?.let { voiceSearch(it) }
     }
 
@@ -1380,44 +1380,91 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             labels.add(t)
             lens.add(m * 60_000)
         }
+        val where = RecStore.chosenTitle(this)
+        labels.add("Куда записывать: $where…")
         AlertDialog.Builder(this).setTitle("Записать «" + c.name + "»")
             .setItems(labels.toTypedArray()) { _, w ->
+                if (w >= lens.size) {
+                    choosePlace { askRecord(c) }
+                    return@setItems
+                }
                 val s = st.current()
                 val ua = c.userAgent.ifEmpty { s?.ua.orEmpty() }.ifEmpty { Net.UA }
                 Recorder.start(this, c, ua, lens[w])
-                Ui.toast(this, "Запись «" + c.name + "» началась. Записи: Настройки → «Записи»")
+                val to = if (RecStore.chosenId(this).isEmpty()) "" else " на флешку"
+                Ui.toast(this, "Запись «" + c.name + "» началась$to. Записи: Настройки → «Записи»")
             }.show()
+    }
+
+    /** Куда сохранять записи: память устройства или флешка. Удобно с пульта: обычный список. */
+    private fun choosePlace(then: (() -> Unit)? = null) {
+        val places = RecStore.places(this)
+        val cur = RecStore.chosenId(this)
+        val names = ArrayList<String>()
+        for (p in places) {
+            val free = RecStore.free(p)
+            names.add((if (p.id == cur) "✓  " else "     ") + p.title + (if (free >= 0) "  ·  свободно " + RecStore.gb(free) else ""))
+        }
+        val missing = cur.isNotEmpty() && places.none { it.id == cur }
+        if (missing) names.add("✓  Флешка (сейчас не вставлена)")
+        names.add("     Выбрать папку на флешке…")
+        val title = if (places.any { it.usb }) "Куда записывать" else "Куда записывать (флешка не найдена)"
+        AlertDialog.Builder(this).setTitle(title)
+            .setItems(names.toTypedArray()) { _, w ->
+                when {
+                    w < places.size -> {
+                        val p = places[w]
+                        RecStore.choose(this, p)
+                        Ui.toast(this, "Записи будут сохраняться: " + p.title)
+                        then?.invoke()
+                    }
+                    missing && w == places.size -> {
+                        Ui.toast(this, "Вставьте флешку в приставку. Пока её нет, записи идут в память устройства")
+                        then?.invoke()
+                    }
+                    !RecStore.pick(this) -> Ui.toast(
+                        this,
+                        "На этом устройстве нет окна выбора папок. Вставьте флешку, подождите полминуты и откройте этот список снова"
+                    )
+                }
+            }
+            .setNegativeButton("Назад") { _, _ -> then?.invoke() }.show()
     }
 
     private fun recordings() {
         val files = Recorder.files(this)
-        if (files.isEmpty()) {
-            Ui.toast(this, "Записей пока нет. Записать: долгое нажатие на канал → «Записать…»")
-            return
-        }
-        val names = files.map { f ->
-            val mb = String.format(Locale.ROOT, "%.0f", f.length() / 1048576.0)
-            (if (Recorder.active(f) != null) "● " else "") + f.nameWithoutExtension + "  ·  " + mb + " МБ"
+        val names = ArrayList<String>()
+        names.add("Куда записывать: " + RecStore.chosenTitle(this) + "…")
+        if (files.isEmpty()) names.add("Записей пока нет. Записать: долгое нажатие на канал → «Записать…»")
+        for (r in files) {
+            val mb = String.format(Locale.ROOT, "%.0f", r.size / 1048576.0)
+            names.add((if (Recorder.active(r) != null) "● " else "") + r.name + "  ·  " + mb + " МБ" + (if (r.usb) "  ·  флешка" else ""))
         }
         AlertDialog.Builder(this).setTitle("Записи")
-            .setItems(names.toTypedArray()) { _, w -> recording(files[w]) }
+            .setItems(names.toTypedArray()) { _, w ->
+                when {
+                    w == 0 -> choosePlace { recordings() }
+                    files.isEmpty() -> {}
+                    else -> recording(files[w - 1])
+                }
+            }
             .setNegativeButton("Закрыть", null).show()
     }
 
-    private fun recording(f: File) {
-        val job = Recorder.active(f)
+    private fun recording(r: RecStore.Rec) {
+        val job = Recorder.active(r)
         val acts = ArrayList<String>()
         acts.add("Смотреть")
         acts.add(if (job != null) "Остановить запись" else "Удалить")
-        AlertDialog.Builder(this).setTitle(f.nameWithoutExtension)
+        AlertDialog.Builder(this).setTitle(r.name)
             .setItems(acts.toTypedArray()) { _, w ->
                 if (w == 0) {
                     val c = Channel()
-                    c.name = f.nameWithoutExtension
-                    c.url = Uri.fromFile(f).toString()
-                    c.adult = Recorder.isAdult(f)
+                    c.name = r.name
+                    c.url = r.uri
+                    c.adult = Recorder.isAdult(r.name)
                     if (Pin.locked(st, c)) {
-                        Pin.unlock(this) { recording(f) }
+                        Pin.unlock(this) { recording(r) }
                         return@setItems
                     }
                     st.playList = listOf(c)
@@ -1430,11 +1477,10 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
                     job.stop.set(true)
                     Ui.toast(this, "Запись останавливается…")
                 } else {
-                    AlertDialog.Builder(this).setTitle("Удалить запись?").setMessage(f.nameWithoutExtension)
+                    AlertDialog.Builder(this).setTitle("Удалить запись?").setMessage(r.name)
                         .setPositiveButton("Удалить") { _, _ ->
-                            if (pb.channel?.url == Uri.fromFile(f).toString()) pb.stop()
-                            f.delete()
-                            Ui.toast(this, "Запись удалена")
+                            if (pb.channel?.url == r.uri) pb.stop()
+                            Ui.toast(this, if (RecStore.delete(this, r)) "Запись удалена" else "Не удалось удалить: флешку вынули или она защищена от записи")
                         }.setNegativeButton("Отмена", null).show()
                 }
             }.show()
