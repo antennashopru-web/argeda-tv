@@ -34,6 +34,8 @@ internal class Store private constructor(@JvmField val app: Context) {
     private var curId: String
 
     @JvmField var all: List<Channel> = ArrayList()
+    /** Каналы в порядке плейлиста — от него считается свой порядок ([ordered]). */
+    private var raw: List<Channel> = ArrayList()
     private var visibleCache: List<Channel>? = null
     @JvmField var loadedId: String? = null
     @JvmField var loadingId: String? = null
@@ -162,6 +164,7 @@ internal class Store private constructor(@JvmField val app: Context) {
         loadedId = null
         loadingId = null
         all = ArrayList()
+        raw = ArrayList()
         visibleCache = null
         status = ""
     }
@@ -192,6 +195,7 @@ internal class Store private constructor(@JvmField val app: Context) {
         val showing = s.id == loadedId
         if (!showing) {
             all = ArrayList()
+            raw = ArrayList()
             visibleCache = null
         }
         val g = ++gen
@@ -235,7 +239,8 @@ internal class Store private constructor(@JvmField val app: Context) {
         val s = current() ?: return
         val t = readFile(cacheFile(s)) ?: return
         val r = M3u.parse(t)
-        all = r.list
+        raw = r.list
+        all = ordered(r.list)
         visibleCache = null
         headerEpg = r.epg
         headerTz = r.tz
@@ -248,7 +253,8 @@ internal class Store private constructor(@JvmField val app: Context) {
         val r = M3u.parse(text)
         main.post {
             if (g != gen) return@post
-            all = r.list
+            raw = r.list
+        all = ordered(r.list)
             visibleCache = null
             headerEpg = r.epg
             headerTz = r.tz
@@ -355,6 +361,60 @@ internal class Store private constructor(@JvmField val app: Context) {
     }
 
     fun adultCount(): Int = all.count { it.adult }
+
+    // ---------- Свой порядок каналов ----------
+
+    /** Свои номера: ключ канала → место в списке (с 1). Остальные каналы идут за ними в порядке плейлиста. */
+    private fun positions(): Map<String, Int> {
+        val m = HashMap<String, Int>()
+        try {
+            val o = JSONObject(p.getString("chpos", "{}") ?: "{}")
+            for (k in o.keys()) m[k] = o.getInt(k)
+        } catch (_: JSONException) {
+        }
+        return m
+    }
+
+    fun hasOwnNumber(c: Channel): Boolean = positions().containsKey(c.key())
+
+    /** Ставит канал на место n (0 — вернуть как в плейлисте) и пересчитывает номера. */
+    fun setNumber(c: Channel, n: Int) {
+        val m = HashMap(positions())
+        // Каналы, которые уже стоят на этом месте или дальше, сдвигаются на одно вниз.
+        if (n > 0) for (k in m.keys.toList()) if (k != c.key() && m[k]!! >= n) m[k] = m[k]!! + 1
+        if (n > 0) m[c.key()] = n else m.remove(c.key())
+        val o = JSONObject()
+        for ((k, v) in m) o.put(k, v)
+        p.edit().putString("chpos", o.toString()).apply()
+        all = ordered(raw)
+        visibleCache = null
+        kidsKeys = null
+        notifyChanged()
+    }
+
+    fun resetNumbers() {
+        p.edit().remove("chpos").apply()
+        all = ordered(raw)
+        visibleCache = null
+        kidsKeys = null
+        notifyChanged()
+    }
+
+    fun ownNumbersCount(): Int = positions().size
+
+    private fun ordered(list: List<Channel>): List<Channel> {
+        val pos = positions()
+        val r: MutableList<Channel>
+        if (pos.isEmpty()) r = ArrayList(list)
+        else {
+            val moved = list.filter { pos.containsKey(it.key()) }.sortedBy { pos[it.key()] }
+            val ks = moved.mapTo(HashSet()) { it.key() }
+            r = list.filterTo(ArrayList(list.size)) { !ks.contains(it.key()) }
+            for (c in moved) r.add((pos[c.key()]!! - 1).coerceIn(0, r.size), c)
+        }
+        for (i in r.indices) r[i].num = i + 1
+        return r
+    }
 
     // ---------- Детский режим ----------
 
