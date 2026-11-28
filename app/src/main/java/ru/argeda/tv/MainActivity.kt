@@ -1066,6 +1066,9 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         acts.add { setAutostart(!auto) }
         items.add("Таймер сна: " + Alerts.sleepLabel())
         acts.add { Alerts.nextSleep(this) }
+        Sound.mode = getSharedPreferences("argeda", MODE_PRIVATE).getInt(Sound.PREF, Sound.mode).coerceIn(0, Sound.NAMES.size - 1)
+        items.add("Звук: " + Sound.NAMES[Sound.mode])
+        acts.add { chooseSound() }
         items.add("Тема: " + Themes.NAMES[Themes.get(this)])
         acts.add { chooseTheme() }
         items.add("Размер текста: " + Themes.TEXT_NAMES[Themes.textSize(this)])
@@ -1200,6 +1203,17 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             st.settingsOpen = true
             Ui.toast(this, "Настройки защищены PIN-кодом")
         }
+    }
+
+    /** Звук: обычный, ровная громкость между каналами или ночной (тихие взрывы, понятная речь). */
+    private fun chooseSound() {
+        AlertDialog.Builder(this).setTitle("Звук")
+            .setSingleChoiceItems(Sound.NAMES, Sound.mode) { d, w ->
+                d.dismiss()
+                Sound.mode = w
+                getSharedPreferences("argeda", MODE_PRIVATE).edit().putInt(Sound.PREF, w).apply()
+                Ui.toast(this, "Звук: " + Sound.NAMES[w])
+            }.show()
     }
 
     private fun chooseTextSize() {

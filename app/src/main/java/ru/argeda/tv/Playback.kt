@@ -13,6 +13,7 @@ import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
@@ -20,6 +21,8 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import java.util.Locale
@@ -63,6 +66,9 @@ internal class Playback private constructor(private val app: Context) {
      */
     private var meter: DefaultBandwidthMeter? = null
 
+    /** Ровная громкость / ночной звук (см. [Sound]). */
+    private val sound = Sound()
+
     fun addListener(l: Listener) {
         if (!ls.contains(l)) ls.add(l)
     }
@@ -90,7 +96,16 @@ internal class Playback private constructor(private val app: Context) {
             .setBufferDurationsMs(15_000, 50_000, 500, 2_000)
             .setPrioritizeTimeOverSizeThresholds(true)
             .build()
-        val p = ExoPlayer.Builder(app, DefaultRenderersFactory(app).setEnableDecoderFallback(true))
+        Sound.mode = app.getSharedPreferences("argeda", Context.MODE_PRIVATE).getInt(Sound.PREF, Sound.OFF)
+        val rf = object : DefaultRenderersFactory(app) {
+            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioTrackPlaybackParams: Boolean): AudioSink? =
+                DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf<AudioProcessor>(sound))
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+        }
+        val p = ExoPlayer.Builder(app, rf.setEnableDecoderFallback(true))
             .setLoadControl(load)
             .setBandwidthMeter(m)
             .build()
