@@ -16,7 +16,6 @@ import android.text.Editable
 import android.text.InputFilter
 import android.text.InputType
 import android.text.TextWatcher
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -746,8 +745,13 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         st.playList = ArrayList(l)
         st.playIndex = i
         st.playTitle = if (search.length() > 0) "Поиск: " + search.text.toString().trim() else titleOf(curGroup)
+        if (Pin.locked(st, c)) {
+            // Канал 18+: сначала PIN-код, потом полный экран.
+            Pin.unlock(this) { openFull(c) }
+            return
+        }
         st.played(c)
-        if (!same(pb.channel, c)) pb.play(c)
+        if (!same(pb.channel, c) || pb.locked) pb.play(c)
         previewRun?.let { ui.removeCallbacks(it) }
         focusLast = true
         startActivity(Intent(this, PlayerActivity::class.java).putExtra("key", c.key()))
@@ -759,6 +763,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         pBuf.visibility = if (on && pb.buffering && pb.error.isEmpty()) View.VISIBLE else View.GONE
         pArch.visibility = if (on && pb.isArchive()) View.VISIBLE else View.GONE
         val msg = when {
+            pb.locked && on -> pb.error + if (channelsView.isInTouchMode) "\nКоснитесь ещё раз, чтобы ввести код" else "\nOK — ввести код"
             pb.error.isNotEmpty() && on -> pb.error
             on -> ""
             !st.preview() -> "Предпросмотр выключен.\nOK — смотреть на весь экран"
@@ -816,7 +821,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
                 return@setItems
             }
             if (w == recAt) {
-                askRecord(c)
+                Pin.guard(this, c) { askRecord(c) }
                 return@setItems
             }
             if (w == numAt) {
@@ -1050,7 +1055,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             playbackChanged()
         }
         if (st.adultCount() > 0) {
-            items.add(if (st.showAdult) "Скрыть каналы 18+" else "Показать каналы 18+")
+            items.add(if (st.showAdult) "Каналы 18+: снова закрыть PIN-кодом" else "Каналы 18+: открыть PIN-кодом")
             acts.add { toggleAdult() }
         }
         if (st.all.isNotEmpty()) {
@@ -1245,35 +1250,19 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             }.show()
     }
 
+    /** Каналы 18+ всегда в списке; здесь их можно открыть PIN-кодом заранее или снова закрыть. */
     private fun toggleAdult() {
         if (st.showAdult) {
             st.setShowAdult(false)
-            if (pb.channel?.adult == true) pb.stop()
-            Ui.toast(this, "Каналы 18+ скрыты")
+            if (pb.channel?.adult == true) pb.retry() // сразу закрываем и то, что идёт сейчас
+            Ui.toast(this, "Каналы 18+ снова только по PIN-коду")
             render()
             return
         }
-        if (!st.hasPin()) {
-            askPin("Придумайте PIN-код для каналов 18+ (4–8 цифр)") { pin ->
-                if (pin.length < 4) {
-                    Ui.toast(this, "PIN-код — не меньше 4 цифр")
-                    return@askPin
-                }
-                st.setPin(pin)
-                st.setShowAdult(true)
-                Ui.toast(this, "PIN-код сохранён. Каналы 18+ видны до выхода из приложения")
-                render()
-            }
-        } else {
-            askPin("Введите PIN-код") { pin ->
-                if (!st.checkPin(pin)) {
-                    Ui.toast(this, "Неверный PIN-код")
-                    return@askPin
-                }
-                st.setShowAdult(true)
-                Ui.toast(this, "Каналы 18+ видны до выхода из приложения")
-                render()
-            }
+        Pin.unlock(this) {
+            Ui.toast(this, "Каналы 18+ открыты до выхода из приложения")
+            if (pb.locked) pb.retry()
+            render()
         }
     }
 
@@ -1426,6 +1415,11 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
                     val c = Channel()
                     c.name = f.nameWithoutExtension
                     c.url = Uri.fromFile(f).toString()
+                    c.adult = Recorder.isAdult(f)
+                    if (Pin.locked(st, c)) {
+                        Pin.unlock(this) { recording(f) }
+                        return@setItems
+                    }
                     st.playList = listOf(c)
                     st.playIndex = 0
                     st.playTitle = "Записи"
@@ -1473,14 +1467,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         dialogWith(title, e) { cb(e.text.toString()) }
     }
 
-    private fun askPin(title: String, cb: (String) -> Unit) {
-        val e = EditText(this)
-        e.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        e.filters = arrayOf<InputFilter>(InputFilter.LengthFilter(8))
-        e.gravity = Gravity.CENTER
-        e.textSize = 24f
-        dialogWith(title, e) { cb(e.text.toString().trim()) }
-    }
+    private fun askPin(title: String, cb: (String) -> Unit) = Pin.ask(this, title, cb)
 
     /** Окно с полем ввода: OK на клавиатуре нажимает кнопку «OK». */
     private fun dialogWith(title: String, e: EditText, ok: () -> Unit) {
