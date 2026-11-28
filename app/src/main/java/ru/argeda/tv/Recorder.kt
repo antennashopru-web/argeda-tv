@@ -59,7 +59,11 @@ internal object Recorder {
         val job = Job(ch.name, f, System.currentTimeMillis() + durationMs)
         jobs.add(job)
         val i = Intent(app, RecordService::class.java)
-        if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(i) else app.startService(i)
+        try {
+            if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(i) else app.startService(i)
+        } catch (e: Exception) {
+            // Запись по расписанию, а система не дала запустить службу из фона — пишем без неё.
+        }
         Thread({
             try {
                 FileOutputStream(f).use { out -> capture(job, ch, ua, out, false) }

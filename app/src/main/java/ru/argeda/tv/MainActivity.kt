@@ -715,10 +715,10 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
     private fun openFromEpg(c: Channel, r: EpgAdapter.Row) {
         val now = System.currentTimeMillis()
         if (r.future) {
-            val on = Alerts.toggle(this, c, r.p)
-            Ui.toast(this, if (on) "Напомню в " + hm.format(Date(r.p.start - 60_000L)) + ", за минуту до начала" else "Напоминание снято")
-            val i = ea.rows().indexOf(r)
-            if (i >= 0) ea.notifyItemChanged(i)
+            Plans.ask(this, c, r.p) {
+                val i = ea.rows().indexOf(r)
+                if (i >= 0) ea.notifyItemChanged(i)
+            }
             return
         }
         if (r.now) {
@@ -1140,8 +1140,7 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             val (c, p) = sorted[w]
             val t = System.currentTimeMillis()
             if (p.start > t) {
-                val on = Alerts.toggle(this, c, p)
-                Ui.toast(this, if (on) "Напомню в " + hm.format(Date(p.start - 60_000L)) + ": «" + p.title + "»" else "Напоминание снято")
+                Plans.ask(this, c, p) {}
                 return@setItems
             }
             openFromEpg(c, EpgAdapter.Row(p, Catchup.can(c, st.current(), p.start, t), p.stop > t, false, false))

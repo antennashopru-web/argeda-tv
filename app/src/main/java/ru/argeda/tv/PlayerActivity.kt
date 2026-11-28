@@ -969,10 +969,10 @@ internal class PlayerActivity : Activity(), Playback.Listener {
 
     /** Будущая передача: OK ставит или снимает напоминание. */
     private fun remind(c: Channel, r: EpgAdapter.Row) {
-        val on = Alerts.toggle(this, c, r.p)
-        Ui.toast(this, if (on) "Напомню в " + hm.format(Date(r.p.start - 60_000L)) + ", за минуту до начала" else "Напоминание снято")
-        val i = ea.rows().indexOf(r)
-        if (i >= 0) ea.notifyItemChanged(i)
+        Plans.ask(this, c, r.p) {
+            val i = ea.rows().indexOf(r)
+            if (i >= 0) ea.notifyItemChanged(i)
+        }
     }
 
     /** Напоминание: «Смотреть» — включить канал прямо здесь. */
