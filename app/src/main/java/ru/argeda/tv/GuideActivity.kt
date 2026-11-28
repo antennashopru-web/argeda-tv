@@ -158,9 +158,7 @@ internal class GuideActivity : Activity() {
         val p = Epg.at(c.progs, t)
         val pb = Playback.get(this)
         if (at != 0L && p != null && p.start > now) {
-            val on = Alerts.toggle(this, c, p)
-            Ui.toast(this, if (on) "Напомню в " + hm.format(Date(p.start - 60_000L)) + ": «" + p.title + "»" else "Напоминание снято")
-            ad.notifyItemChanged(l.indexOf(c))
+            Plans.ask(this, c, p) { ad.notifyItemChanged(l.indexOf(c)) }
             return
         }
         st.playList = ArrayList(l)
@@ -254,7 +252,9 @@ internal class GuideActivity : Activity() {
                     continue
                 }
                 val p = ps[i]
-                val mark = if (p.start > System.currentTimeMillis() && Alerts.has(this@GuideActivity, c, p.start)) "  · напомню" else ""
+                val fut = p.start > System.currentTimeMillis()
+                val mark = if (fut && Plans.has(this@GuideActivity, c, p.start)) "  · запишу"
+                else if (fut && Alerts.has(this@GuideActivity, c, p.start)) "  · напомню" else ""
                 v.text = hm.format(Date(p.start)) + "  " + p.title.ifEmpty { "Без названия" } + mark
             }
         }

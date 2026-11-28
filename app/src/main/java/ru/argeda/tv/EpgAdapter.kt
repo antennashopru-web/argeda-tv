@@ -99,6 +99,11 @@ internal class EpgAdapter(private val l: Listener) : RecyclerView.Adapter<EpgAda
                 h.mark.text = "ЗАПИСЬ"
                 h.mark.setBackgroundResource(R.drawable.mark_bg)
             }
+            r.future && ch != null && Plans.has(h.itemView.context, ch, r.p.start) -> {
+                h.mark.visibility = View.VISIBLE
+                h.mark.text = "ЗАПИШУ"
+                h.mark.setBackgroundResource(R.drawable.live_bg)
+            }
             r.future && ch != null && Alerts.has(h.itemView.context, ch, r.p.start) -> {
                 h.mark.visibility = View.VISIBLE
                 h.mark.text = "НАПОМНЮ"

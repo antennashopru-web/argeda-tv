@@ -9,6 +9,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(c: Context, i: Intent) {
         val a = i.action
         if (a != Intent.ACTION_BOOT_COMPLETED && a != "android.intent.action.QUICKBOOT_POWERON") return
+        Plans.schedule(c) // будильники записей по расписанию после перезагрузки пропадают
         if (!c.getSharedPreferences("argeda", Context.MODE_PRIVATE).getBoolean("autostart", false)) return
         try {
             c.startActivity(Intent(c, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

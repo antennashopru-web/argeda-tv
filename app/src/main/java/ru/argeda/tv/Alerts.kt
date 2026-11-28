@@ -28,6 +28,7 @@ internal object Alerts {
     fun attach(a: Activity) {
         top = WeakReference(a)
         scheduleReminders(a)
+        Plans.schedule(a)
     }
 
     @JvmStatic
