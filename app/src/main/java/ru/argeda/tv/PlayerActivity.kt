@@ -70,6 +70,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
     private lateinit var infoNext: TextView
     private lateinit var bList: TextView
     private lateinit var bLive: TextView
+    private lateinit var bPause: TextView
     private lateinit var bFav: TextView
     private lateinit var bAudio: TextView
     private lateinit var bQuality: TextView
@@ -112,7 +113,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
     private val clockRun: Runnable = object : Runnable {
         override fun run() {
             if (info.visibility == View.VISIBLE) fillTime()
-            ui.postDelayed(this, if (pb.isArchive()) 1000L else 20_000L)
+            ui.postDelayed(this, if (pb.isArchive() || pb.shifted) 1000L else 20_000L)
         }
     }
 
@@ -154,6 +155,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         infoBtns = findViewById(R.id.infoBtns)
         bList = findViewById(R.id.bList)
         bLive = findViewById(R.id.bLive)
+        bPause = findViewById(R.id.bPause)
         bFav = findViewById(R.id.bFav)
         bAudio = findViewById(R.id.bAudio)
         bQuality = findViewById(R.id.bQuality)
@@ -264,6 +266,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         }
         findViewById<View>(R.id.bEpg).setOnClickListener { showEpg() }
         bLive.setOnClickListener { toLive() }
+        bPause.setOnClickListener { togglePause(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) }
         bFav.setOnClickListener {
             val c = list[index]
             val on = st.toggleFav(c)
@@ -429,7 +432,10 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         } else error.visibility = View.GONE
         val arch = pb.isArchive()
         infoArch.visibility = if (arch) View.VISIBLE else View.GONE
-        bLive.visibility = if (arch) View.VISIBLE else View.GONE
+        bLive.visibility = if (arch || pb.shifted) View.VISIBLE else View.GONE
+        val paused = pb.player?.playWhenReady == false
+        bPause.text = if (paused) "Продолжить" else "Пауза"
+        bPause.setCompoundDrawablesRelativeWithIntrinsicBounds(if (paused) R.drawable.ic_play else R.drawable.ic_pause, 0, 0, 0)
         bAudio.visibility = if (audioTracks().size > 1) View.VISIBLE else View.GONE
         bQuality.visibility = if (tracks(C.TRACK_TYPE_VIDEO).size > 1) View.VISIBLE else View.GONE
         bSubs.visibility = if (tracks(C.TRACK_TYPE_TEXT).isNotEmpty()) View.VISIBLE else View.GONE
@@ -483,8 +489,9 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         if (play) {
             val at = livePausedAt
             livePausedAt = 0
-            if (!pb.isArchive()) {
-                // Пауза эфира: если у канала есть архив, продолжаем с места паузы, иначе — снова эфир.
+            if (!pb.isArchive() && !pb.shifted) {
+                // Пауза эфира: если у канала есть архив, продолжаем с места паузы из архива,
+                // иначе — из временной записи, сделанной во время паузы; если её нет — снова эфир.
                 val c = list[index]
                 val now = System.currentTimeMillis()
                 if (at > 0 && MainActivity.same(pb.channel, c) && Catchup.can(c, st.current(), at, now)) {
@@ -494,11 +501,19 @@ internal class PlayerActivity : Activity(), Playback.Listener {
                     showInfo(false)
                     return
                 }
+                if (at > 0 && MainActivity.same(pb.channel, c) && now - at > 3000 && pb.resumeShift(at)) {
+                    Ui.toast(this, "С места паузы")
+                    showInfo(false)
+                    return
+                }
                 pl.seekToDefaultPosition()
             }
             pl.play()
         } else {
-            if (!pb.isArchive() && pl.playWhenReady) livePausedAt = System.currentTimeMillis()
+            if (!pb.isArchive() && !pb.shifted && pl.playWhenReady) {
+                livePausedAt = System.currentTimeMillis()
+                pb.startShift()
+            }
             pl.pause()
         }
         showInfo(false)
@@ -778,8 +793,13 @@ internal class PlayerActivity : Activity(), Playback.Listener {
             infoNext.visibility = View.VISIBLE
             return
         }
-        val t = System.currentTimeMillis()
-        infoClock.text = hm.format(Date(t))
+        val sh = pb.shifted && MainActivity.same(pb.channel, c)
+        val t = if (sh) pb.position() else System.currentTimeMillis()
+        infoClock.text = hm.format(Date(t)) + when {
+            pb.player?.playWhenReady == false -> "  · пауза"
+            sh -> "  · отставание " + max(1L, (System.currentTimeMillis() - t) / 60_000L) + " мин"
+            else -> ""
+        }
         val p = Epg.at(c.progs, t)
         val n = Epg.after(c.progs, t)
         if (p != null) {
@@ -1039,7 +1059,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
                     hideInfo()
                     return true
                 }
-                if (arch) {
+                if (arch || pb.shifted) {
                     toLive()
                     return true
                 }

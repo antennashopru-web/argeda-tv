@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.ProgressiveMediaSource
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import java.util.Locale
 
@@ -50,6 +51,9 @@ internal class Playback private constructor(private val app: Context) {
     @JvmField var archStart = 0L
     @JvmField var archEnd = 0L
     @JvmField var archTitle = ""
+    /** Пауза эфира без архива: показ идёт из временной записи [TimeShift]; shiftBase — момент паузы. */
+    @JvmField var shifted = false
+    @JvmField var shiftBase = 0L
     @JvmField var buffering = false
     @JvmField var fatal = false
     @JvmField var error = ""
@@ -120,6 +124,7 @@ internal class Playback private constructor(private val app: Context) {
         owners = 0
         ui.removeCallbacks(retryRun)
         saveBandwidth()
+        if (shifted || TimeShift.active()) dropShift() // ушли из приложения — после возвращения снова эфир
         player?.let {
             if (isArchive()) archBase = position()
             it.release()
@@ -140,12 +145,56 @@ internal class Playback private constructor(private val app: Context) {
 
     /** Текущий момент эфира, который сейчас на экране (для архива — время записи). */
     fun position(): Long {
-        if (!isArchive()) return System.currentTimeMillis()
         val played = playedMs + if (playingSince > 0) SystemClock.elapsedRealtime() - playingSince else 0
+        if (shifted) return shiftBase + played
+        if (!isArchive()) return System.currentTimeMillis()
         return archBase + played
     }
 
+    /** Можно ли записывать эфир на паузе (обычная http-ссылка, не архив и не файл). */
+    fun canShift(): Boolean {
+        val c = channel ?: return false
+        return !isArchive() && !shifted && (c.url.startsWith("http://") || c.url.startsWith("https://"))
+    }
+
+    /** Поставили эфир на паузу — начинаем записывать его во временный файл. */
+    fun startShift() {
+        val c = channel ?: return
+        if (!canShift()) return
+        TimeShift.start(app, c, uaFor(c))
+    }
+
+    /** Продолжить с места паузы из временной записи; false — записи нет. */
+    fun resumeShift(pausedAt: Long): Boolean {
+        val c = channel ?: return false
+        if (!TimeShift.active() || TimeShift.url != c.url || TimeShift.bytes() < 200_000) {
+            TimeShift.stop()
+            return false
+        }
+        shifted = true
+        shiftBase = pausedAt
+        retries = 0
+        start(false)
+        return true
+    }
+
+    private fun dropShift() {
+        if (shifted || TimeShift.active()) TimeShift.stop()
+        shifted = false
+        shiftBase = 0
+    }
+
+    private fun uaFor(c: Channel): String {
+        val s = st.current()
+        return when {
+            c.userAgent.isNotEmpty() -> c.userAgent
+            s != null && s.ua.isNotEmpty() -> s.ua
+            else -> Net.UA
+        }
+    }
+
     fun play(c: Channel) {
+        dropShift()
         channel = c
         archStart = 0
         archEnd = 0
@@ -156,6 +205,7 @@ internal class Playback private constructor(private val app: Context) {
     }
 
     fun playArchive(c: Channel, from: Long, progStart: Long, progEnd: Long, title: String?) {
+        dropShift()
         channel = c
         archStart = maxOf(1L, progStart)
         archEnd = progEnd
@@ -208,6 +258,15 @@ internal class Playback private constructor(private val app: Context) {
         error = ""
         playedMs = 0
         playingSince = 0
+        val sf = TimeShift.file
+        if (shifted && sf != null) {
+            p.setMediaSource(ProgressiveMediaSource.Factory(TimeShift.Factory(sf)).createMediaSource(MediaItem.fromUri(Uri.fromFile(sf))))
+            p.prepare()
+            p.playWhenReady = true
+            notifyChanged()
+            return
+        }
+        shifted = false
         val s = st.current()
         var url: String = c.url
         if (isArchive()) {
@@ -226,11 +285,7 @@ internal class Playback private constructor(private val app: Context) {
             fail("Ссылки вида $scheme:// пока не поддерживаются.", true)
             return
         }
-        val ua = when {
-            c.userAgent.isNotEmpty() -> c.userAgent
-            s != null && s.ua.isNotEmpty() -> s.ua
-            else -> Net.UA
-        }
+        val ua = uaFor(c)
         val hdr = HashMap<String, String>()
         if (c.referrer.isNotEmpty()) hdr["Referer"] = c.referrer
         val http = DefaultHttpDataSource.Factory()
@@ -264,7 +319,8 @@ internal class Playback private constructor(private val app: Context) {
                 error = ""
                 fatal = false
             } else if (state == Player.STATE_ENDED) {
-                if (isArchive()) seekArchive(position()) // запись закончилась — идём дальше по времени
+                if (shifted) channel?.let { play(it) } // запись паузы кончилась — снова эфир
+                else if (isArchive()) seekArchive(position()) // запись закончилась — идём дальше по времени
                 else if (channel?.url?.startsWith("file:") != true) ui.postDelayed(retryRun, 1500) // прямой эфир оборвался — переподключаемся
             }
             notifyChanged()
@@ -294,7 +350,11 @@ internal class Playback private constructor(private val app: Context) {
 
     private fun onError(e: PlaybackException) {
         val p = player ?: return
-        if (channel == null) return
+        val ch = channel ?: return
+        if (shifted) { // временная запись не читается — просто возвращаемся в эфир
+            play(ch)
+            return
+        }
         if (e.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
             p.seekToDefaultPosition()
             p.prepare()

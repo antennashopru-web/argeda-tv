@@ -108,6 +108,11 @@
                     android:background="@drawable/btn_bg" android:focusable="true" android:clickable="true" android:gravity="center"
                     android:paddingStart="18dp" android:paddingEnd="18dp" android:drawableStart="@drawable/ic_list" android:drawablePadding="8dp"
                     android:text="Каналы" android:textColor="@color/text" />
+                <TextView android:id="@+id/bPause" android:layout_width="wrap_content" android:layout_height="40dp"
+                    android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
+                    android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
+                    android:drawableStart="@drawable/ic_pause" android:drawablePadding="8dp"
+                    android:text="Пауза" android:textColor="@color/text" />
                 <TextView android:id="@+id/bEpg" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"

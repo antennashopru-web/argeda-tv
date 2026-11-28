@@ -62,9 +62,7 @@ internal object Recorder {
         if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(i) else app.startService(i)
         Thread({
             try {
-                FileOutputStream(f).use { out ->
-                    if (isHls(ch.url)) hls(job, ch, ua, out) else plain(job, ch, ua, out)
-                }
+                FileOutputStream(f).use { out -> capture(job, ch, ua, out, false) }
             } catch (e: Exception) {
                 if (job.error.isEmpty() && !job.stop.get()) job.error = Store.describe(e)
             } finally {
@@ -78,6 +76,11 @@ internal object Recorder {
                 }
             }
         }, "record").start()
+    }
+
+    /** Пишет поток канала в out, пока job не остановят или не выйдет время. tail — для HLS начать с последних кусков. */
+    internal fun capture(job: Job, ch: Channel, ua: String, out: OutputStream, tail: Boolean) {
+        if (isHls(ch.url)) hls(job, ch, ua, out, tail) else plain(job, ch, ua, out)
     }
 
     private fun isHls(u: String): Boolean = u.substringBefore('?').lowercase(Locale.ROOT).let { it.endsWith(".m3u8") || it.endsWith(".m3u") }
@@ -103,7 +106,7 @@ internal object Recorder {
         }
     }
 
-    private fun hls(job: Job, ch: Channel, ua: String, out: OutputStream) {
+    private fun hls(job: Job, ch: Channel, ua: String, out: OutputStream, tail: Boolean) {
         var url = ch.url
         var text = Net.getTextQuick(url, ua, 4 shl 20)
         // Главный плейлист с вариантами качества — берём самое высокое.
@@ -112,6 +115,11 @@ internal object Recorder {
             text = Net.getTextQuick(url, ua, 4 shl 20)
         }
         val seen = LinkedHashSet<String>()
+        if (tail) {
+            // Пауза эфира: на экране было примерно три последних куска, более старые не нужны.
+            val segs = text.lines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
+            for (t in segs.dropLast(3)) seen.add(URL(URL(url), t).toString())
+        }
         var fails = 0
         while (!done(job)) {
             if (text.contains("METHOD=AES-128") || text.contains("METHOD=SAMPLE-AES")) throw IOException("поток зашифрован, его нельзя записать")
