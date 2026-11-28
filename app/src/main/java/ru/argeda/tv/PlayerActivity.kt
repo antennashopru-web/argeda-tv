@@ -3,7 +3,13 @@ package ru.argeda.tv
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.app.RemoteAction
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
+import android.graphics.drawable.Icon
 import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -283,6 +289,11 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         bQuality.setOnClickListener { pickQuality() }
         bSubs.setOnClickListener { pickSubs() }
         findViewById<View>(R.id.bStats).setOnClickListener { showStats() }
+        val bPip = findViewById<View>(R.id.bPip)
+        if (!tv && Build.VERSION.SDK_INT >= 26 && packageManager.hasSystemFeature("android.software.picture_in_picture")) {
+            bPip.visibility = View.VISIBLE
+            bPip.setOnClickListener { enterPip() }
+        }
         val bSleep = findViewById<TextView>(R.id.bSleep)
         bSleep.text = "Сон: " + Alerts.sleepLabel()
         bSleep.setOnClickListener {
@@ -342,17 +353,57 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         super.onUserLeaveHint()
         val p = pb.player
         if (tv || Build.VERSION.SDK_INT < 26 || p == null || !p.isPlaying) return
-        try {
-            var w = 16
-            var h = 9
-            val f = p.videoFormat
-            if (f != null && f.width > 0 && f.height > 0) {
-                w = f.width
-                h = f.height
-                if (w * 100 > h * 239) h = w * 100 / 239 // система принимает от 1:2,39 до 2,39:1
-                if (h * 100 > w * 239) w = h * 100 / 239
+        enterPip()
+    }
+
+    /** Кнопки в маленьком окне: предыдущий канал, пауза, следующий канал. */
+    @SuppressLint("NewApi")
+    private fun pipParams(): PictureInPictureParams {
+        val p = pb.player
+        var w = 16
+        var h = 9
+        val f = p?.videoFormat
+        if (f != null && f.width > 0 && f.height > 0) {
+            w = f.width
+            h = f.height
+            if (w * 100 > h * 239) h = w * 100 / 239 // система принимает от 1:2,39 до 2,39:1
+            if (h * 100 > w * 239) w = h * 100 / 239
+        }
+        fun act(code: Int, icon: Int, title: String): RemoteAction {
+            val i = Intent(PIP_ACTION).setPackage(packageName).putExtra("a", code)
+            val pi = PendingIntent.getBroadcast(this, code, i, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            return RemoteAction(Icon.createWithResource(this, icon), title, title, pi)
+        }
+        val playing = p?.playWhenReady == true
+        val acts = arrayListOf(
+            act(1, R.drawable.ic_prev, "Предыдущий канал"),
+            if (playing) act(2, R.drawable.ic_pause, "Пауза") else act(2, R.drawable.ic_play, "Продолжить"),
+            act(3, R.drawable.ic_next, "Следующий канал")
+        )
+        return PictureInPictureParams.Builder().setAspectRatio(Rational(w, h)).setActions(acts).build()
+    }
+
+    private val pipReceiver = object : BroadcastReceiver() {
+        override fun onReceive(c: Context, i: Intent) {
+            when (i.getIntExtra("a", 0)) {
+                1 -> zap(-1)
+                2 -> togglePause(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                3 -> zap(1)
             }
-            enterPictureInPictureMode(PictureInPictureParams.Builder().setAspectRatio(Rational(w, h)).build())
+            if (Build.VERSION.SDK_INT >= 26 && isInPictureInPictureMode) {
+                try {
+                    setPictureInPictureParams(pipParams())
+                } catch (_: Exception) {
+                }
+            }
+        }
+    }
+    private var pipReg = false
+
+    @SuppressLint("NewApi")
+    private fun enterPip() {
+        try {
+            enterPictureInPictureMode(pipParams())
         } catch (ignored: Exception) {
             // устройство не поддерживает «картинку в картинке»
         }
@@ -361,6 +412,18 @@ internal class PlayerActivity : Activity(), Playback.Listener {
     @SuppressLint("NewApi")
     override fun onPictureInPictureModeChanged(pip: Boolean, c: Configuration) {
         super.onPictureInPictureModeChanged(pip, c)
+        if (pip && !pipReg) {
+            val f = IntentFilter(PIP_ACTION)
+            if (Build.VERSION.SDK_INT >= 33) registerReceiver(pipReceiver, f, Context.RECEIVER_NOT_EXPORTED)
+            else registerReceiver(pipReceiver, f)
+            pipReg = true
+        } else if (!pip && pipReg) {
+            try {
+                unregisterReceiver(pipReceiver)
+            } catch (_: Exception) {
+            }
+            pipReg = false
+        }
         if (!pip) return
         hideInfo()
         hideSide()
@@ -396,6 +459,17 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         showInfo(false)
         playbackChanged()
         ui.post(clockRun)
+    }
+
+    override fun onDestroy() {
+        if (pipReg) {
+            try {
+                unregisterReceiver(pipReceiver)
+            } catch (_: Exception) {
+            }
+            pipReg = false
+        }
+        super.onDestroy()
     }
 
     override fun onStop() {
@@ -1198,6 +1272,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
     }
 
     companion object {
+        private const val PIP_ACTION = "ru.argeda.tv.PIP"
         private val FIT_NAMES = arrayOf("Вписать", "Заполнить", "Растянуть")
         private val ROT_NAMES = arrayOf("авто", "альбомный", "книжный")
 
