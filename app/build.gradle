@@ -37,7 +37,7 @@ android {
         release {
             minifyEnabled true
             shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             if (keystoreFile.exists()) signingConfig signingConfigs.release
         }
     }
@@ -62,4 +62,7 @@ dependencies {
     implementation 'androidx.recyclerview:recyclerview:1.3.2'
     // Строка каналов на главном экране Android TV
     implementation 'androidx.tvprovider:tvprovider:1.0.0'
+    // Показ канала на телевизоре через Chromecast (только на телефоне, где есть сервисы Google)
+    implementation 'com.google.android.gms:play-services-cast-framework:21.4.0'
+    implementation 'androidx.mediarouter:mediarouter:1.7.0'
 }
