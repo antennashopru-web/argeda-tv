@@ -158,6 +158,11 @@
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
                     android:drawableStart="@drawable/ic_pip" android:drawablePadding="8dp"
                     android:text="Окно" android:textColor="@color/text" android:visibility="gone" />
+                <TextView android:id="@+id/bCast" android:layout_width="wrap_content" android:layout_height="40dp"
+                    android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
+                    android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"
+                    android:drawableStart="@drawable/ic_cast" android:drawablePadding="8dp"
+                    android:text="На телевизор" android:textColor="@color/text" android:visibility="gone" />
                 <TextView android:id="@+id/bStats" android:layout_width="wrap_content" android:layout_height="40dp"
                     android:layout_marginStart="10dp" android:background="@drawable/btn_bg" android:focusable="true"
                     android:clickable="true" android:gravity="center" android:paddingStart="18dp" android:paddingEnd="18dp"

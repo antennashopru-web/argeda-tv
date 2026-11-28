@@ -289,6 +289,11 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         bQuality.setOnClickListener { pickQuality() }
         bSubs.setOnClickListener { pickSubs() }
         findViewById<View>(R.id.bStats).setOnClickListener { showStats() }
+        val bCast = findViewById<View>(R.id.bCast)
+        if (!tv && Cast.available(this)) {
+            bCast.visibility = View.VISIBLE
+            bCast.setOnClickListener { Cast.pick(this, list[index]) }
+        }
         val bPip = findViewById<View>(R.id.bPip)
         if (!tv && Build.VERSION.SDK_INT >= 26 && packageManager.hasSystemFeature("android.software.picture_in_picture")) {
             bPip.visibility = View.VISIBLE
