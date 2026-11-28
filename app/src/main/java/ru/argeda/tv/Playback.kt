@@ -57,6 +57,8 @@ internal class Playback private constructor(private val app: Context) {
     @JvmField var buffering = false
     @JvmField var fatal = false
     @JvmField var error = ""
+    /** Канал 18+ ждёт PIN-кода: поток не загружается, на экране — просьба ввести код. */
+    @JvmField var locked = false
     private var retries = 0
     private var triedHls = false
     private var playedMs = 0L
@@ -154,7 +156,7 @@ internal class Playback private constructor(private val app: Context) {
     /** Можно ли записывать эфир на паузе (обычная http-ссылка, не архив и не файл). */
     fun canShift(): Boolean {
         val c = channel ?: return false
-        return !isArchive() && !shifted && (c.url.startsWith("http://") || c.url.startsWith("https://"))
+        return !locked && !isArchive() && !shifted && (c.url.startsWith("http://") || c.url.startsWith("https://"))
     }
 
     /** Поставили эфир на паузу — начинаем записывать его во временный файл. */
@@ -232,6 +234,7 @@ internal class Playback private constructor(private val app: Context) {
     fun stop() {
         ui.removeCallbacks(retryRun)
         channel = null
+        locked = false
         archStart = 0
         error = ""
         fatal = false
@@ -258,6 +261,14 @@ internal class Playback private constructor(private val app: Context) {
         error = ""
         playedMs = 0
         playingSince = 0
+        // Любой путь к каналу 18+ (список, ▲▼, номер, поиск, напоминание, главный экран) — только после PIN-кода.
+        locked = Pin.locked(st, c)
+        if (locked) {
+            p.stop()
+            if (shifted || TimeShift.active()) dropShift()
+            fail(LOCK_MSG, true)
+            return
+        }
         val sf = TimeShift.file
         if (shifted && sf != null) {
             p.setMediaSource(ProgressiveMediaSource.Factory(TimeShift.Factory(sf)).createMediaSource(MediaItem.fromUri(Uri.fromFile(sf))))
@@ -382,6 +393,7 @@ internal class Playback private constructor(private val app: Context) {
 
     companion object {
         private const val PREF_BW = "bw"
+        const val LOCK_MSG = "Канал 18+ — нужен PIN-код"
         private var inst: Playback? = null
 
         @JvmStatic

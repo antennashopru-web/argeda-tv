@@ -72,7 +72,7 @@ internal class Store private constructor(@JvmField val app: Context) {
     @JvmField val recent: MutableList<String> = ArrayList()
     @JvmField var lastKey: String?
 
-    /** Каналы 18+ открываются PIN-кодом до выхода из приложения. */
+    /** Каналы 18+ всегда в списке, а смотреть их можно после PIN-кода — до выхода из приложения (см. [Pin]). */
     @JvmField var showAdult = false
 
     @JvmField var playList: List<Channel>? = null
@@ -378,8 +378,8 @@ internal class Store private constructor(@JvmField val app: Context) {
         visibleCache?.let { return it }
         val kids = kids()
         val v = if (kids) all.filterTo(ArrayList()) { kidsOk(it) && !isHidden(it) }
-        else if (showAdult && hiddenCh.isEmpty() && hiddenGroups.isEmpty()) all
-        else all.filterTo(ArrayList(all.size)) { (showAdult || !it.adult) && !isHidden(it) }
+        else if (hiddenCh.isEmpty() && hiddenGroups.isEmpty()) all
+        else all.filterTo(ArrayList(all.size)) { !isHidden(it) }
         visibleCache = v
         return v
     }

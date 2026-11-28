@@ -69,6 +69,10 @@ internal object Plans {
                 if (w == 0) {
                     val on = Alerts.toggle(a, ch, p)
                     Ui.toast(a, if (on) "Напомню в " + hm.format(Date(p.start - EARLY)) + ": «" + p.title + "»" else "Напоминание снято")
+                } else if (!rec && Pin.locked(Store.get(a), ch)) {
+                    // Записать канал 18+ — только после PIN-кода.
+                    Pin.unlock(a) { ask(a, ch, p, changed) }
+                    return@setItems
                 } else {
                     val on = toggle(a, ch, p)
                     Ui.toast(a, if (on) "Запишу «" + p.title + "» в " + hm.format(Date(p.start)) + ". Приставку не выключайте"

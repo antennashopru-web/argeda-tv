@@ -89,6 +89,12 @@ internal class ChannelAdapter(private val st: Store, private val l: Listener) : 
             h.now.text = if (p != null && p.title.isNotEmpty()) "Не отвечал при проверке · " + p.title else "Не отвечал при проверке"
             h.now.visibility = View.VISIBLE
         }
+        if (Pin.locked(st, c)) {
+            // Канал 18+ виден в списке, но передачи и сам эфир — только после PIN-кода.
+            h.now.text = "18+ · по PIN-коду"
+            h.now.visibility = View.VISIBLE
+            h.prog.visibility = View.GONE
+        }
         h.itemView.alpha = if (dead) 0.5f else 1f
         h.fav.visibility = if (st.isFav(c)) View.VISIBLE else View.GONE
         h.itemView.isSelected = c === current

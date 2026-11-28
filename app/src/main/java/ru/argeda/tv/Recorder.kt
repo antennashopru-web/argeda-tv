@@ -49,12 +49,16 @@ internal object Recorder {
     fun files(c: Context): List<File> =
         (dir(c).listFiles { f -> f.isFile && f.name.endsWith(".ts") } ?: emptyArray()).sortedByDescending { it.lastModified() }
 
+    /** Запись канала 18+ (в названии файла есть пометка) — смотреть по PIN-коду. */
+    fun isAdult(f: File): Boolean = M3u.ADULT.matcher(f.nameWithoutExtension).find()
+
     fun active(f: File): Job? = synchronized(jobs) { jobs.firstOrNull { it.file == f } }
 
     fun start(c: Context, ch: Channel, ua: String, durationMs: Long) {
         val app = c.applicationContext
         val stamp = SimpleDateFormat("yyyy-MM-dd HH-mm", Locale.ROOT).format(Date())
-        val safe = ch.name.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().ifEmpty { "Канал" }
+        var safe = ch.name.replace(Regex("[\\\\/:*?\"<>|]"), " ").trim().ifEmpty { "Канал" }
+        if (ch.adult && !M3u.ADULT.matcher(safe).find()) safe += " (18+)" // такую запись тоже смотрят по PIN-коду
         val f = File(dir(app), "$safe $stamp.ts")
         val job = Job(ch.name, f, System.currentTimeMillis() + durationMs)
         jobs.add(job)

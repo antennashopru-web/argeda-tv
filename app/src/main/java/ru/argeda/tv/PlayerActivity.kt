@@ -292,7 +292,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         val bCast = findViewById<View>(R.id.bCast)
         if (!tv && Cast.available(this)) {
             bCast.visibility = View.VISIBLE
-            bCast.setOnClickListener { Cast.pick(this, list[index]) }
+            bCast.setOnClickListener { list[index].let { c -> Pin.guard(this, c) { Cast.pick(this, c) } } }
         }
         val bPip = findViewById<View>(R.id.bPip)
         if (!tv && Build.VERSION.SDK_INT >= 26 && packageManager.hasSystemFeature("android.software.picture_in_picture")) {
@@ -463,6 +463,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         }
         showInfo(false)
         playbackChanged()
+        if (pb.locked) ui.post { unlockNow() } // пришли на канал 18+ (напоминание, телепрограмма, главный экран) — сразу код
         ui.post(clockRun)
     }
 
@@ -506,7 +507,11 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         val err = pb.error.isNotEmpty()
         buffering.visibility = if (pb.buffering && !err) View.VISIBLE else View.GONE
         if (err) {
-            error.text = pb.error + (if (pb.fatal) (if (tv) "\n\nOK — повторить   ▲▼ — другой канал" else "\n\nКоснитесь экрана, чтобы повторить") else "")
+            error.text = pb.error + when {
+                pb.locked -> if (tv) "\n\nOK — ввести PIN-код   ▲▼ — другой канал" else "\n\nКоснитесь экрана, чтобы ввести PIN-код"
+                pb.fatal -> if (tv) "\n\nOK — повторить   ▲▼ — другой канал" else "\n\nКоснитесь экрана, чтобы повторить"
+                else -> ""
+            }
             error.visibility = View.VISIBLE
         } else error.visibility = View.GONE
         val arch = pb.isArchive()
@@ -539,12 +544,20 @@ internal class PlayerActivity : Activity(), Playback.Listener {
         ui.removeCallbacks(seekRun)
         seekDelta = 0
         seek.visibility = View.GONE
-        if (now) pb.play(c)
-        else {
+        if (now) {
+            pb.play(c)
+            if (pb.locked) unlockNow() // выбрали канал 18+ сами — сразу спрашиваем код
+        } else {
             pb.player?.stop()
             ui.postDelayed(zapRun, 200) // быстрое листание: запускаем только последний канал
         }
         showInfo(false)
+    }
+
+    /** Канал 18+ на экране: PIN-код — и он сразу включается. */
+    private fun unlockNow() {
+        val c = pb.channel ?: return
+        Pin.unlock(this) { if (pb.channel === c) pb.retry() }
     }
 
     private fun zap(d: Int) {
@@ -1214,7 +1227,8 @@ internal class PlayerActivity : Activity(), Playback.Listener {
                 if (digitBuf.isNotEmpty()) {
                     ui.removeCallbacks(digitRun)
                     jumpToNumber()
-                } else if (pb.fatal) pb.retry()
+                } else if (pb.locked) unlockNow()
+                else if (pb.fatal) pb.retry()
                 else if (arch) showInfo(true)
                 else showSide()
                 return true
@@ -1246,6 +1260,7 @@ internal class PlayerActivity : Activity(), Playback.Listener {
             override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
                 if (side.visibility == View.VISIBLE) hideSide()
                 else if (epgSide.visibility == View.VISIBLE) hideEpg()
+                else if (pb.locked) unlockNow()
                 else if (pb.fatal) pb.retry()
                 else if (info.visibility == View.VISIBLE && !compact) hideInfo()
                 else showInfo(false, true)

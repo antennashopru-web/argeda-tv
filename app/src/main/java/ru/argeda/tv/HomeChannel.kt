@@ -39,7 +39,7 @@ internal object HomeChannel {
         if (st.all.isEmpty()) return
         val vis = st.visible()
         val byKey = HashMap<String, Channel>(vis.size * 2)
-        for (ch in vis) byKey.putIfAbsent(ch.key(), ch)
+        for (ch in vis) if (!ch.adult) byKey.putIfAbsent(ch.key(), ch) // 18+ на главный экран Android TV не выносим
         val keys = st.favOrder.ifEmpty { st.recent }
         val now = System.currentTimeMillis()
         val items = keys.mapNotNull { byKey[it] }.take(MAX).map { ch ->
