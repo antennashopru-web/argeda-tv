@@ -797,6 +797,8 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             labels.add("      ▲  Передвинуть выше")
             labels.add("      ▼  Передвинуть ниже")
         }
+        labels.add("      #  Свой номер канала (сейчас " + c.num + ")…")
+        val numAt = labels.size - 1
         labels.add("      ⊘  Скрыть канал")
         val hideAt = labels.size - 1
         labels.add("      ●  Записать…")
@@ -815,6 +817,10 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
             }
             if (w == recAt) {
                 askRecord(c)
+                return@setItems
+            }
+            if (w == numAt) {
+                askNumber(c)
                 return@setItems
             }
             if (w == hideAt) {
@@ -1075,6 +1081,14 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
         acts.add { chooseTextSize() }
         items.add("Проверить обновления")
         acts.add { Updater.check(this, true) }
+        if (st.ownNumbersCount() > 0) {
+            items.add("Свой порядок каналов: сбросить")
+            acts.add {
+                st.resetNumbers()
+                Ui.toast(this, "Порядок каналов — как в плейлисте")
+                render()
+            }
+        }
         items.add("Записи…")
         acts.add { recordings() }
         items.add("Подсказка: как пользоваться")
@@ -1325,6 +1339,41 @@ internal class MainActivity : Activity(), Store.Listener, Playback.Listener {
                     Ui.toast(this, "Детский режим выключен")
                 }
             }.show()
+    }
+
+    // ---------- Свой порядок ----------
+
+    /** Свой номер: канал встаёт на это место в общем списке, номера остальных сдвигаются. */
+    private fun askNumber(c: Channel) {
+        val e = EditText(this)
+        e.inputType = android.text.InputType.TYPE_CLASS_NUMBER
+        e.setText(c.num.toString())
+        e.setSelectAllOnFocus(true)
+        val pad = Ui.dp(this, 20)
+        val box = FrameLayout(this)
+        box.setPadding(pad, pad / 2, pad, 0)
+        box.addView(e)
+        val b = AlertDialog.Builder(this).setTitle("Номер для «" + c.name + "»")
+            .setMessage("Канал встанет на это место, остальные сдвинутся. Номер работает и на пульте.")
+            .setView(box)
+            .setPositiveButton("Сохранить") { _, _ ->
+                val n = e.text.toString().trim().toIntOrNull()
+                if (n == null || n <= 0) {
+                    Ui.toast(this, "Введите номер больше нуля")
+                    return@setPositiveButton
+                }
+                st.setNumber(c, n)
+                Ui.toast(this, "«" + c.name + "» теперь под номером " + c.num)
+                render()
+            }
+            .setNegativeButton("Отмена", null)
+        if (st.hasOwnNumber(c)) b.setNeutralButton("Как в плейлисте") { _, _ ->
+            st.setNumber(c, 0)
+            Ui.toast(this, "«" + c.name + "»: номер как в плейлисте — " + c.num)
+            render()
+        }
+        b.show()
+        e.requestFocus()
     }
 
     // ---------- Запись ----------
