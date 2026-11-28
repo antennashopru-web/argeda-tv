@@ -91,7 +91,28 @@ internal class Store private constructor(@JvmField val app: Context) {
     private val epgBg = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
+    /** Раз в полчаса: устаревшие плейлист и телепрограмма скачиваются заново, даже если приложение не закрывают днями. */
+    private val autoRun: Runnable = object : Runnable {
+        override fun run() {
+            if (inst !== this@Store) return // настройки восстановили из копии — работает уже новый Store
+            refreshIfStale()
+            main.postDelayed(this, AUTO_CHECK)
+        }
+    }
+
+    fun refreshIfStale() {
+        val s = current() ?: return
+        if (busy || s.id != loadedId) return
+        val now = System.currentTimeMillis()
+        if (s.type != "file" && now - cacheFile(s).lastModified() > PLAYLIST_TTL) {
+            load(false, true) // телепрограмма проверится в следующий раз
+            return
+        }
+        if (epgUrls(s).isNotEmpty() && now - epgFile(s, 0).lastModified() > EPG_TTL) loadEpg(s, true)
+    }
+
     init {
+        main.postDelayed(autoRun, AUTO_CHECK)
         jsonArray("sources") { a -> for (i in 0 until a.length()) sources.add(Source.from(a.getJSONObject(i))) }
         curId = p.getString("cur", "") ?: ""
         fav.addAll(p.getStringSet("fav", HashSet()) ?: emptySet())
@@ -185,7 +206,8 @@ internal class Store private constructor(@JvmField val app: Context) {
     // ---------- Загрузка плейлиста ----------
 
     /** Сначала показывает сохранённую копию, затем при необходимости скачивает свежий плейлист. */
-    fun load(force: Boolean) {
+    /** quiet — фоновое обновление: если не вышло, сообщение не показывается (останутся сохранённые каналы). */
+    fun load(force: Boolean, quiet: Boolean = false) {
         val s = current()
         if (s == null) {
             resetLoaded()
@@ -226,8 +248,10 @@ internal class Store private constructor(@JvmField val app: Context) {
                 if (g != gen) return@post
                 busy = false
                 loadingId = null
-                status = fe
-                statusSeq++
+                if (!(quiet && fe.isNotEmpty())) {
+                    status = fe
+                    statusSeq++
+                }
                 notifyChanged()
                 loadEpg(s, false)
             }
@@ -688,6 +712,7 @@ internal class Store private constructor(@JvmField val app: Context) {
         const val DEFAULT_EPG = "https://iptvx.one/EPG_LITE"
         private const val PLAYLIST_TTL = 6 * 3600_000L
         private const val EPG_TTL = 12 * 3600_000L
+        private const val AUTO_CHECK = 30 * 60_000L
 
         /** Что не копируется: служебные отметки и то, что зависит от устройства. */
         private val NOT_BACKED = setOf("bw", "updAt")
